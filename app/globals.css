@@ -1,0 +1,64 @@
+/* app/globals.css */
+@import "tailwindcss";
+
+/* ================================
+   THEME SETUP (Tailwind 4 way)
+   ================================ */
+@theme {
+  /* Brand palette */
+  --color-brand: oklch(0.68 0.21 270); /* purple-ish */
+  --color-brand-dark: oklch(0.52 0.23 270);
+  --color-surface: oklch(0.98 0.01 270); /* light bg */
+  --color-glass: oklch(1 0 0 / 0.2); /* white w/ opacity */
+
+  /* Shadows */
+  --shadow-glass: 0 4px 20px rgb(0 0 0 / 0.1);
+
+  /* Rounded */
+  --radius-xl: 1.25rem;
+}
+
+/* ================================
+   BASE STYLES
+   ================================ */
+body {
+  background: linear-gradient(
+    to bottom,
+    #ffffff,
+    #ffffff
+  );
+  color: #000; /* if needed */
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+
+/* Smooth animations for everything */
+* {
+  transition: all 0.25s ease;
+  -webkit-tap-highlight-color: transparent; /* 🚀 Remove blue tap highlight */
+}
+
+/* Optional: also remove outlines unless keyboard navigating */
+:focus {
+  outline: none;
+}
+
+/* ================================
+   UTILITY CLASSES (extras you’ll use)
+   ================================ */
+
+/* Glass card effect */
+.glass {
+  background: var(--color-glass);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-glass);
+}
+
+/* Headings */
+h1, h2, h3, h4 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
