@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, Edit, Trash2, Award, Users, Vote, CheckCircle, XCircle, 
   Clock, DollarSign, Eye, EyeOff, Save, X, Calendar, MapPin,
-  TrendingUp, BarChart3, Coins, Image as ImageIcon
+  TrendingUp, BarChart3, Coins, Image as ImageIcon, FileText
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -17,6 +17,10 @@ export default function AwardManagement({ event }) {
   const [editingCategory, setEditingCategory] = useState(null);
   const [editingNominee, setEditingNominee] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [awardTitle, setAwardTitle] = useState("");
+  const [awardDescription, setAwardDescription] = useState("");
+  const [editingAwardInfo, setEditingAwardInfo] = useState(false);
+  
   const [categoryForm, setCategoryForm] = useState({
     name: "",
     description: "",
@@ -25,14 +29,17 @@ export default function AwardManagement({ event }) {
     is_public_vote: true,
     vote_begin: "",
     vote_end: "",
-    category_image: ""
+    category_image: "",
+    vote_per_user: 1
   });
+  
   const [nomineeForm, setNomineeForm] = useState({
     name: "",
     description: "",
     location: "",
     image_url: ""
   });
+  
   const [userRole, setUserRole] = useState(null);
   const [activeView, setActiveView] = useState("categories");
   const [loading, setLoading] = useState(false);
@@ -44,6 +51,7 @@ export default function AwardManagement({ event }) {
   useEffect(() => {
     if (!event?.id) return;
     
+    fetchAwardInfo();
     fetchUserRole();
     fetchCategories();
     checkActiveStatus();
@@ -81,6 +89,49 @@ export default function AwardManagement({ event }) {
       fetchAnalytics();
     }
   }, [activeView]);
+
+  const fetchAwardInfo = async () => {
+    if (!event?.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from("events")
+        .select("award_title, award_description")
+        .eq("id", event.id)
+        .single();
+      
+      if (!error && data) {
+        setAwardTitle(data.award_title || "");
+        setAwardDescription(data.award_description || "");
+      }
+    } catch (error) {
+      console.error("Error fetching award info:", error);
+    }
+  };
+
+  const saveAwardInfo = async () => {
+    if (!event?.id) return;
+    
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from("events")
+        .update({
+          award_title: awardTitle,
+          award_description: awardDescription
+        })
+        .eq("id", event.id);
+
+      if (error) throw error;
+      
+      setEditingAwardInfo(false);
+    } catch (error) {
+      console.error("Error saving award info:", error);
+      alert("Error saving award information: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchUserRole = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -146,36 +197,48 @@ export default function AwardManagement({ event }) {
     if (!event?.id) return;
 
     try {
-      // Get total categories and nominees
-      const { data: categoriesData } = await supabase
+      // Get total categories
+      const { data: categoriesData, error: categoriesError } = await supabase
         .from("award_categories")
-        .select("id, name, is_active, vote_count")
+        .select("id, name, is_active, category_image")
         .eq("event_id", event.id);
 
-      // Get all nominees with their vote counts
-      const { data: nomineesData } = await supabase
+      if (categoriesError) throw categoriesError;
+
+      // Get all nominees with their vote counts for this event
+      const { data: nomineesData, error: nomineesError } = await supabase
         .from("award_nominees")
         .select("id, name, category_id, vote_count")
-        .in("category_id", categoriesData?.map(cat => cat.id) || []);
+        .eq("event_id", event.id);
+
+      if (nomineesError) throw nomineesError;
 
       // Calculate total votes across all categories
-      const totalVotes = categoriesData?.reduce((sum, cat) => sum + (cat.vote_count || 0), 0) || 0;
+      const totalVotes = nomineesData?.reduce((sum, nominee) => sum + (nominee.vote_count || 0), 0) || 0;
 
-      // Find top performing nominees
+      // Find top performing nominees (all nominees sorted by vote_count)
       const topNominees = [...(nomineesData || [])]
         .sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0))
-        .slice(0, 5);
+        .slice(0, 10);
 
       // Calculate category statistics
       const categoryStats = categoriesData?.map(category => {
         const categoryNominees = nomineesData?.filter(nominee => nominee.category_id === category.id) || [];
         const totalCategoryVotes = categoryNominees.reduce((sum, nominee) => sum + (nominee.vote_count || 0), 0);
+        const topNominee = categoryNominees.sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0))[0];
         
         return {
-          ...category,
+          id: category.id,
+          name: category.name,
+          is_active: category.is_active,
+          category_image: category.category_image,
           nomineeCount: categoryNominees.length,
           totalVotes: totalCategoryVotes,
-          topNominee: categoryNominees.sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0))[0]
+          topNominee: topNominee ? {
+            id: topNominee.id,
+            name: topNominee.name,
+            vote_count: topNominee.vote_count || 0
+          } : null
         };
       }).sort((a, b) => (b.totalVotes || 0) - (a.totalVotes || 0));
 
@@ -202,7 +265,8 @@ export default function AwardManagement({ event }) {
       is_public_vote: true,
       vote_begin: "",
       vote_end: "",
-      category_image: ""
+      category_image: "",
+      vote_per_user: 1
     });
     setShowCategoryForm(true);
   };
@@ -217,7 +281,8 @@ export default function AwardManagement({ event }) {
       is_public_vote: category.is_public_vote,
       vote_begin: category.vote_begin ? category.vote_begin.slice(0, 16) : "",
       vote_end: category.vote_end ? category.vote_end.slice(0, 16) : "",
-      category_image: category.category_image || ""
+      category_image: category.category_image || "",
+      vote_per_user: category.vote_per_user || 1
     });
     setShowCategoryForm(true);
   };
@@ -261,6 +326,11 @@ export default function AwardManagement({ event }) {
       return;
     }
 
+    if (categoryForm.vote_per_user <= 0) {
+      alert("Votes per user must be greater than 0");
+      return;
+    }
+
     setLoading(true);
     try {
       const categoryData = {
@@ -272,7 +342,8 @@ export default function AwardManagement({ event }) {
         is_public_vote: categoryForm.is_public_vote,
         vote_begin: categoryForm.vote_begin,
         vote_end: categoryForm.vote_end,
-        category_image: categoryForm.category_image
+        category_image: categoryForm.category_image,
+        vote_per_user: Math.floor(categoryForm.vote_per_user)
       };
 
       if (editingCategory) {
@@ -334,6 +405,7 @@ export default function AwardManagement({ event }) {
     try {
       const nomineeData = {
         category_id: selectedCategory.id,
+        event_id: event.id, // Add event_id for analytics
         name: nomineeForm.name,
         description: nomineeForm.description,
         location: nomineeForm.location,
@@ -659,6 +731,30 @@ export default function AwardManagement({ event }) {
                     </label>
                   </div>
 
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Votes Per User *
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Vote className="w-4 h-4 text-gray-400" />
+                      </div>
+                      <input
+                        type="number"
+                        value={categoryForm.vote_per_user}
+                        onChange={(e) => setCategoryForm({ ...categoryForm, vote_per_user: Math.floor(parseFloat(e.target.value) || 1) })}
+                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
+                        style={{ focusRingColor: pageColor }}
+                        placeholder="1"
+                        min="1"
+                        step="1"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Number of votes each user can cast in this category
+                    </p>
+                  </div>
+
                   {categoryForm.is_paid && (
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -848,9 +944,81 @@ export default function AwardManagement({ event }) {
 
       {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Award Management</h1>
-          <p className="text-gray-600">Manage award categories and nominees</p>
+        <div className="flex-1">
+          {editingAwardInfo ? (
+            <div className="space-y-4 max-w-2xl">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Award Title *
+                </label>
+                <input
+                  type="text"
+                  value={awardTitle}
+                  onChange={(e) => setAwardTitle(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent text-2xl font-bold"
+                  style={{ focusRingColor: pageColor }}
+                  placeholder="Enter award title"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Award Description
+                </label>
+                <textarea
+                  value={awardDescription}
+                  onChange={(e) => setAwardDescription(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
+                  style={{ focusRingColor: pageColor }}
+                  placeholder="Enter award description"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={saveAwardInfo}
+                  disabled={loading || !awardTitle.trim()}
+                  className="flex items-center gap-2 text-white px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50 transition"
+                  style={{ backgroundColor: pageColor }}
+                >
+                  {loading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingAwardInfo(false);
+                    fetchAwardInfo(); // Reset to original values
+                  }}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-bold text-gray-900">
+                  {awardTitle || "Award Management"}
+                </h1>
+                <button
+                  onClick={() => setEditingAwardInfo(true)}
+                  className="p-1 text-gray-400 hover:text-gray-600 transition"
+                >
+                  <Edit className="w-5 h-5" />
+                </button>
+              </div>
+              {awardDescription && (
+                <p className="text-gray-600 max-w-2xl">{awardDescription}</p>
+              )}
+              {!awardDescription && (
+                <p className="text-gray-600">Manage award categories and nominees</p>
+              )}
+            </div>
+          )}
         </div>
         
         <div className="flex flex-col sm:flex-row gap-4">
@@ -991,6 +1159,11 @@ export default function AwardManagement({ event }) {
                   </div>
                 </div>
 
+                <div className="flex items-center justify-between text-sm text-gray-600">
+                  <span>Votes per user: {category.vote_per_user || 1}</span>
+                  <span>Nominees: {category.nominee_count || 0}</span>
+                </div>
+
                 {category.is_active && category.vote_end && (
                   <CountdownTimer 
                     targetDate={category.vote_end} 
@@ -999,10 +1172,6 @@ export default function AwardManagement({ event }) {
                 )}
 
                 <div className="flex items-center gap-4 text-sm text-gray-500 pt-2 border-t border-gray-100">
-                  <div className="flex items-center gap-1">
-                    <Users size={16} />
-                    <span>{category.nominee_count || 0} nominees</span>
-                  </div>
                   <div className="flex items-center gap-1">
                     {category.is_public_vote ? <Eye size={16} /> : <EyeOff size={16} />}
                     <span>{category.is_public_vote ? 'Public' : 'Private'}</span>
@@ -1037,6 +1206,10 @@ export default function AwardManagement({ event }) {
                   {selectedCategory.description && (
                     <p className="text-gray-600 mt-1">{selectedCategory.description}</p>
                   )}
+                  <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
+                    <span>Votes per user: {selectedCategory.vote_per_user || 1}</span>
+                    <span>{selectedCategory.nominee_count || 0} nominees</span>
+                  </div>
                 </div>
               </div>
 
@@ -1251,30 +1424,37 @@ export default function AwardManagement({ event }) {
             </div>
           </div>
 
-          {/* Top Nominees */}
+          {/* Top Nominees Table */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Performing Nominees</h3>
             {analytics?.topNominees && analytics.topNominees.length > 0 ? (
-              <div className="space-y-3">
-                {analytics.topNominees.map((nominee, index) => (
-                  <div key={nominee.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center w-8 h-8 bg-gray-200 rounded-full text-sm font-semibold">
-                        #{index + 1}
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{nominee.name}</p>
-                        <p className="text-sm text-gray-600">{nominee.vote_count || 0} votes</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-600">Category</p>
-                      <p className="font-medium text-gray-900">
-                        {analytics.categoryStats?.find(cat => cat.id === nominee.category_id)?.name || 'Unknown'}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Rank</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Nominee</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Category</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Votes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analytics.topNominees.map((nominee, index) => (
+                      <tr key={nominee.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-center w-6 h-6 bg-gray-200 rounded-full text-sm font-semibold">
+                            {index + 1}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 font-medium text-gray-900">{nominee.name}</td>
+                        <td className="py-3 px-4 text-gray-600">
+                          {analytics.categoryStats?.find(cat => cat.id === nominee.category_id)?.name || 'Unknown'}
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-gray-900">{nominee.vote_count || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">
@@ -1287,48 +1467,57 @@ export default function AwardManagement({ event }) {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Category Performance</h3>
             {analytics?.categoryStats && analytics.categoryStats.length > 0 ? (
-              <div className="space-y-4">
-                {analytics.categoryStats.map((category) => (
-                  <div key={category.id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        {category.category_image && (
-                          <img 
-                            src={category.category_image} 
-                            alt={category.name}
-                            className="w-10 h-10 rounded-lg object-cover"
-                          />
-                        )}
-                        <div>
-                          <h4 className="font-semibold text-gray-900">{category.name}</h4>
-                          <p className="text-sm text-gray-600">{category.nomineeCount} nominees</p>
-                        </div>
-                      </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        category.is_active 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {category.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Total Votes:</span>
-                        <span className="font-semibold">{category.totalVotes || 0}</span>
-                      </div>
-                      {category.topNominee && (
-                        <div className="flex justify-between text-sm">
-                          <span>Leading Nominee:</span>
-                          <span className="font-semibold">
-                            {category.topNominee.name} ({category.topNominee.vote_count || 0} votes)
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Category</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Status</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Nominees</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Total Votes</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Leading Nominee</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analytics.categoryStats.map((category) => (
+                      <tr key={category.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            {category.category_image && (
+                              <img 
+                                src={category.category_image} 
+                                alt={category.name}
+                                className="w-10 h-10 rounded-lg object-cover"
+                              />
+                            )}
+                            <span className="font-medium text-gray-900">{category.name}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            category.is_active 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {category.is_active ? 'Active' : 'Inactive'}
                           </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                        </td>
+                        <td className="py-3 px-4 text-gray-600">{category.nomineeCount}</td>
+                        <td className="py-3 px-4 font-semibold text-gray-900">{category.totalVotes || 0}</td>
+                        <td className="py-3 px-4 text-gray-600">
+                          {category.topNominee ? (
+                            <div>
+                              <div className="font-medium">{category.topNominee.name}</div>
+                              <div className="text-sm text-gray-500">{category.topNominee.vote_count} votes</div>
+                            </div>
+                          ) : (
+                            'No votes yet'
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">

@@ -4,18 +4,21 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Award, Vote, Clock, Eye, EyeOff, Users, 
-  TrendingUp, Crown, Star, MapPin, Calendar, Coins
+  TrendingUp, Crown, MapPin, Coins,
+  Trophy, Gift, Sparkles, Target
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
 export default function AwardComponent({ event }) {
   const [categories, setCategories] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState(null);
   const [nominees, setNominees] = useState([]);
   const [user, setUser] = useState(null);
   const [userBalance, setUserBalance] = useState(0);
   const [voting, setVoting] = useState(null);
-  const [activeView, setActiveView] = useState("categories"); // categories, nominees, analytics
+  const [showVoteModal, setShowVoteModal] = useState(false);
+  const [selectedNominee, setSelectedNominee] = useState(null);
+  const [voteCount, setVoteCount] = useState(1);
+  const [activeView, setActiveView] = useState("categories");
 
   const pageColor = event?.page_color || "#D4AF37";
 
@@ -25,12 +28,11 @@ export default function AwardComponent({ event }) {
     fetchUserData();
     fetchCategories();
     
-    // Real-time subscription for vote updates
     const subscription = supabase
-      .channel('vote-updates')
+      .channel('award-updates')
       .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'award_votes' },
-        () => selectedCategory && fetchNominees(selectedCategory.id)
+        { event: '*', schema: 'public', table: 'award_nominees' },
+        () => fetchNomineesForAllCategories()
       )
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'award_categories' },
@@ -39,19 +41,17 @@ export default function AwardComponent({ event }) {
       .subscribe();
 
     return () => subscription.unsubscribe();
-  }, [event?.id, selectedCategory]);
+  }, [event?.id]);
 
   const fetchUserData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       setUser(user);
-      // Fetch user balance from token_wallets table
       const { data: wallet } = await supabase
         .from('token_wallets')
         .select('balance')
         .eq('user_id', user.id)
         .single();
-      
       setUserBalance(wallet?.balance || 0);
     }
   };
@@ -63,54 +63,63 @@ export default function AwardComponent({ event }) {
       .from("award_categories")
       .select("*")
       .eq("event_id", event.id)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: true });
     
-    if (!error) setCategories(data || []);
+    if (!error) {
+      setCategories(data || []);
+      fetchNomineesForAllCategories(data || []);
+    }
   };
 
-  const fetchNominees = async (categoryId) => {
-    const { data, error } = await supabase
-      .from("award_nominees")
-      .select("*")
-      .eq("category_id", categoryId)
-      .order("vote_count", { ascending: false });
+  const fetchNomineesForAllCategories = async (categoriesList = categories) => {
+    if (!categoriesList.length) return;
+
+    const allNominees = [];
     
-    if (!error) setNominees(data || []);
+    for (const category of categoriesList) {
+      const { data, error } = await supabase
+        .from("award_nominees")
+        .select("*")
+        .eq("category_id", category.id)
+        .order("vote_count", { ascending: false });
+      
+      if (!error && data) {
+        allNominees.push(...data.map(nominee => ({
+          ...nominee,
+          category_name: category.name,
+          category: category
+        })));
+      }
+    }
+    
+    setNominees(allNominees);
   };
 
   const getUserName = async (userId) => {
-    // Try to get name from fans table first
-    const { data: fanData } = await supabase
-      .from('fans')
-      .select('full_name')
-      .eq('user_id', userId)
-      .single();
+    try {
+      const [fansResult, publishersResult] = await Promise.all([
+        supabase.from('fans').select('full_name, name').eq('id', userId).single(),
+        supabase.from('publishers').select('full_name, name').eq('id', userId).single()
+      ]);
 
-    if (fanData?.full_name) return fanData.full_name;
+      if (fansResult.data && !fansResult.error) {
+        return fansResult.data.full_name || fansResult.data.name || 'User';
+      }
 
-    // If not found in fans, try publishers table
-    const { data: publisherData } = await supabase
-      .from('publishers')
-      .select('full_name')
-      .eq('user_id', userId)
-      .single();
+      if (publishersResult.data && !publishersResult.error) {
+        return publishersResult.data.full_name || publishersResult.data.name || 'User';
+      }
 
-    if (publisherData?.full_name) return publisherData.full_name;
-
-    // If still not found, return a default name
-    return 'User';
+      return 'User';
+    } catch (error) {
+      console.error("Error fetching user name:", error);
+      return 'User';
+    }
   };
 
-  const handleVote = async (nominee) => {
+  const openVoteModal = (nominee, category) => {
     if (!user) {
       alert("Please login to vote");
-      return;
-    }
-
-    const category = categories.find(cat => cat.id === nominee.category_id);
-    
-    if (!category) {
-      alert("Category not found");
       return;
     }
 
@@ -119,628 +128,610 @@ export default function AwardComponent({ event }) {
       return;
     }
 
-    // Check if user already voted in this category
-    const { data: existingVote } = await supabase
-      .from("award_votes")
-      .select("id")
-      .eq("category_id", nominee.category_id)
-      .eq("user_id", user.id)
-      .single();
+    setSelectedNominee({ ...nominee, category });
+    setVoteCount(1);
+    setShowVoteModal(true);
+  };
 
-    if (existingVote) {
-      alert("You have already voted in this category");
+  const handleVote = async () => {
+    if (!user || !selectedNominee || !selectedNominee.category) return;
+
+    const category = selectedNominee.category;
+    const totalCost = category.is_paid ? voteCount * category.vote_amount : 0;
+
+    if (category.is_paid && userBalance < totalCost) {
+      alert(`Insufficient balance. You need ${totalCost} tokens to cast ${voteCount} votes.`);
       return;
     }
 
-    if (category.is_paid) {
-      if (userBalance < category.vote_amount) {
-        alert(`Insufficient balance. You need ${category.vote_amount} tokens to vote.`);
-        return;
-      }
+    setVoting(selectedNominee.id);
 
-      const confirmVote = window.confirm(
-        `This vote will cost ${category.vote_amount} tokens. Do you want to proceed?`
-      );
+    try {
+      const voterName = await getUserName(user.id);
 
-      if (!confirmVote) return;
+      const newVoteCount = (selectedNominee.vote_count || 0) + voteCount;
+      const { error: nomineeError } = await supabase
+        .from("award_nominees")
+        .update({ vote_count: newVoteCount })
+        .eq("id", selectedNominee.id);
 
-      setVoting(nominee.id);
+      if (nomineeError) throw nomineeError;
 
-      try {
-        // Get voter's name
-        const voterName = await getUserName(user.id);
-
-        // Start transaction - insert vote first
-        const { error: voteError } = await supabase
-          .from("award_votes")
-          .insert([{
-            category_id: nominee.category_id,
-            nominee_id: nominee.id,
-            user_id: user.id,
-            amount: category.vote_amount
-          }]);
-
-        if (voteError) throw voteError;
-
-        // Update nominee vote count
-        const { error: nomineeError } = await supabase
-          .from("award_nominees")
-          .update({ vote_count: (nominee.vote_count || 0) + 1 })
-          .eq("id", nominee.id);
-
-        if (nomineeError) throw nomineeError;
-
-        // Deduct from user's wallet and update last_action
+      if (category.is_paid && totalCost > 0) {
         const { error: walletError } = await supabase
           .from("token_wallets")
           .update({ 
-            balance: userBalance - category.vote_amount,
-            last_action: `Vote for ${nominee.name} in ${category.name} at ${event.name}`
+            balance: userBalance - totalCost,
+            last_action: `Voted for ${selectedNominee.name} in ${category.name} at ${event.name}`
           })
-          .eq("user_id", user.id);
+          .eq('user_id', user.id);
 
         if (walletError) throw walletError;
 
-        // Get event owner's user_id to credit their wallet
-        const { data: eventData } = await supabase
+        const { data: eventData, error: eventError } = await supabase
           .from('events')
-          .select('user_id')
+          .select('user_id, name')
           .eq('id', event.id)
           .single();
 
-        if (eventData?.user_id) {
-          // Get current balance of event owner
-          const { data: ownerWallet } = await supabase
+        if (!eventError && eventData?.user_id) {
+          const { data: publisherWallet, error: publisherWalletError } = await supabase
             .from('token_wallets')
             .select('balance')
             .eq('user_id', eventData.user_id)
             .single();
 
-          if (ownerWallet) {
-            // Credit event owner's wallet and update last_action
-            const { error: ownerWalletError } = await supabase
-              .from("token_wallets")
-              .update({ 
-                balance: ownerWallet.balance + category.vote_amount,
-                last_action: `Vote for ${category.name} ${nominee.name} by ${voterName}`
-              })
-              .eq("user_id", eventData.user_id);
+          if (publisherWalletError && publisherWalletError.code !== 'PGRST116') {
+            console.error('Error fetching publisher wallet:', publisherWalletError);
+          } else {
+            const publisherCurrentBalance = publisherWallet?.balance || 0;
+            const publisherNewBalance = publisherCurrentBalance + totalCost;
+            const description = `Received ${voteCount} vote${voteCount > 1 ? 's' : ''} for ${selectedNominee.name} in ${category.name} from ${voterName}`;
 
-            if (ownerWalletError) throw ownerWalletError;
+            if (publisherWallet) {
+              const { error: updatePublisherError } = await supabase
+                .from('token_wallets')
+                .update({ 
+                  balance: publisherNewBalance,
+                  last_action: description
+                })
+                .eq('user_id', eventData.user_id);
+
+              if (updatePublisherError) {
+                console.error('Error updating publisher wallet:', updatePublisherError);
+              }
+            } else {
+              const { error: createPublisherError } = await supabase
+                .from('token_wallets')
+                .insert({ 
+                  user_id: eventData.user_id,
+                  balance: publisherNewBalance,
+                  last_action: description
+                });
+
+              if (createPublisherError) {
+                console.error('Error creating publisher wallet:', createPublisherError);
+              }
+            }
           }
         }
 
-        // Record transaction for voter
-        await supabase
-          .from("transactions")
-          .insert([{
-            user_id: user.id,
-            type: 'vote_payment',
-            amount: -category.vote_amount,
-            description: `Vote for ${nominee.name} in ${category.name} at ${event.name}`,
-            status: 'completed'
-          }]);
-
-        // Record transaction for event owner
-        if (eventData?.user_id) {
-          await supabase
-            .from("transactions")
-            .insert([{
-              user_id: eventData.user_id,
-              type: 'vote_receipt',
-              amount: category.vote_amount,
-              description: `Vote for ${category.name} ${nominee.name} by ${voterName}`,
-              status: 'completed'
-            }]);
-        }
-
-        setUserBalance(prev => prev - category.vote_amount);
-        alert("Vote cast successfully!");
-
-        // Refresh nominees to show updated vote count
-        fetchNominees(nominee.category_id);
-
-      } catch (error) {
-        console.error("Error processing vote:", error);
-        alert("Error processing vote: " + error.message);
-      } finally {
-        setVoting(null);
+        setUserBalance(prev => prev - totalCost);
       }
-    } else {
-      // Free vote
-      setVoting(nominee.id);
 
-      try {
-        const { error: voteError } = await supabase
-          .from("award_votes")
-          .insert([{
-            category_id: nominee.category_id,
-            nominee_id: nominee.id,
-            user_id: user.id,
-            amount: 0
-          }]);
+      alert(`Success! ${voteCount} vote${voteCount > 1 ? 's' : ''} cast for ${selectedNominee.name}`);
 
-        if (voteError) throw voteError;
+      fetchNomineesForAllCategories();
+      setShowVoteModal(false);
+      setSelectedNominee(null);
 
-        const { error: nomineeError } = await supabase
-          .from("award_nominees")
-          .update({ vote_count: (nominee.vote_count || 0) + 1 })
-          .eq("id", nominee.id);
-
-        if (nomineeError) throw nomineeError;
-
-        alert("Vote cast successfully!");
-        
-        // Refresh nominees to show updated vote count
-        fetchNominees(nominee.category_id);
-        
-      } catch (error) {
-        console.error("Error processing vote:", error);
-        alert("Error processing vote: " + error.message);
-      } finally {
-        setVoting(null);
-      }
+    } catch (error) {
+      console.error("Error processing vote:", error);
+      alert("Error processing vote: " + error.message);
+    } finally {
+      setVoting(null);
     }
   };
 
-  const CountdownTimer = ({ targetDate }) => {
+  const CountdownTimer = ({ startDate, endDate }) => {
     const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+    const [status, setStatus] = useState("upcoming");
 
     useEffect(() => {
       const timer = setInterval(() => {
         const now = new Date().getTime();
-        const target = new Date(targetDate).getTime();
-        const difference = target - now;
+        const start = new Date(startDate).getTime();
+        const end = new Date(endDate).getTime();
 
-        if (difference <= 0) {
-          clearInterval(timer);
+        if (now < start) {
+          setStatus("upcoming");
+          const difference = start - now;
+          setTimeLeft({
+            days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+            hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+            minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
+            seconds: Math.floor((difference % (1000 * 60)) / 1000)
+          });
+        } else if (now >= start && now <= end) {
+          setStatus("active");
+          const difference = end - now;
+          setTimeLeft({
+            days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+            hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+            minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
+            seconds: Math.floor((difference % (1000 * 60)) / 1000)
+          });
+        } else {
+          setStatus("ended");
           setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-          fetchCategories();
-          return;
         }
-
-        setTimeLeft({
-          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-          minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
-          seconds: Math.floor((difference % (1000 * 60)) / 1000)
-        });
       }, 1000);
 
       return () => clearInterval(timer);
-    }, [targetDate]);
+    }, [startDate, endDate]);
 
-    if (!targetDate) return null;
+    const getStatusColor = () => {
+      switch (status) {
+        case "active": return "bg-emerald-500 text-white";
+        case "upcoming": return "bg-blue-500 text-white";
+        case "ended": return "bg-gray-400 text-white";
+        default: return "bg-gray-400 text-white";
+      }
+    };
+
+    const getStatusText = () => {
+      switch (status) {
+        case "active": return "Voting Active";
+        case "upcoming": return "Voting Starts Soon";
+        case "ended": return "Voting Closed";
+        default: return "";
+      }
+    };
 
     return (
-      <div className="flex items-center gap-2 bg-gray-900 text-white px-3 py-2 rounded-lg">
-        <Clock className="w-4 h-4" />
-        <span className="font-mono text-sm">
-          {timeLeft.days > 0 && `${timeLeft.days}d `}
-          {timeLeft.hours.toString().padStart(2, '0')}:
-          {timeLeft.minutes.toString().padStart(2, '0')}:
-          {timeLeft.seconds.toString().padStart(2, '0')}
-        </span>
+      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${getStatusColor()} text-xs`}>
+        <Clock className="w-3 h-3" />
+        <div className="flex-1">
+          <div className="font-medium">{getStatusText()}</div>
+          {status !== "ended" && (
+            <div className="font-mono text-xs">
+              {timeLeft.days > 0 && `${timeLeft.days}d `}
+              {timeLeft.hours.toString().padStart(2, '0')}:
+              {timeLeft.minutes.toString().padStart(2, '0')}:
+              {timeLeft.seconds.toString().padStart(2, '0')}
+            </div>
+          )}
+        </div>
       </div>
     );
   };
 
-  // Get all nominees for analytics view
-  const getAllNomineesForAnalytics = async () => {
-    if (!categories.length) return [];
-    
-    const allNominees = [];
-    for (const category of categories) {
-      const { data } = await supabase
-        .from("award_nominees")
-        .select("*")
-        .eq("category_id", category.id)
-        .order("vote_count", { ascending: false });
-      
-      if (data) {
-        allNominees.push(...data.map(nominee => ({ ...nominee, category_name: category.name })));
-      }
-    }
-    return allNominees;
+  const VoteModal = () => {
+    if (!showVoteModal || !selectedNominee || !selectedNominee.category) return null;
+
+    const category = selectedNominee.category;
+    const totalCost = category.is_paid ? voteCount * category.vote_amount : 0;
+    const maxVotes = category.vote_per_user || 1000;
+
+    return (
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowVoteModal(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-white rounded-xl p-4 max-w-xs w-full mx-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center mb-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center mx-auto mb-2">
+                <Vote className="w-5 h-5 text-white" />
+              </div>
+              <h3 className="text-sm font-semibold text-gray-900">Cast Your Vote</h3>
+              <p className="text-gray-600 text-xs mt-1">for {selectedNominee.name}</p>
+            </div>
+
+            <div className="space-y-3">
+              {category.is_paid && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
+                  <div className="flex items-center gap-1 text-amber-800 mb-1">
+                    <Coins className="w-3 h-3" />
+                    <span className="font-medium text-xs">Paid Voting</span>
+                  </div>
+                  <p className="text-amber-700 text-xs">
+                    {category.vote_amount} tokens per vote
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Number of Votes
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setVoteCount(prev => Math.max(1, prev - 1));
+                    }}
+                    className="w-7 h-7 rounded border border-gray-300 flex items-center justify-center hover:bg-gray-50 text-xs"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    max={maxVotes}
+                    value={voteCount}
+                    onChange={(e) => {
+                      const value = Math.max(1, Math.min(maxVotes, parseInt(e.target.value) || 1));
+                      setVoteCount(value);
+                    }}
+                    className="flex-1 text-center border border-gray-300 rounded py-1.5 px-2 font-semibold text-sm"
+                  />
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setVoteCount(prev => Math.min(maxVotes, prev + 1));
+                    }}
+                    className="w-7 h-7 rounded border border-gray-300 flex items-center justify-center hover:bg-gray-50 text-xs"
+                  >
+                    +
+                  </button>
+                </div>
+                {category.vote_per_user && (
+                  <p className="text-xs text-gray-500 mt-1 text-center">
+                    Max {category.vote_per_user} votes
+                  </p>
+                )}
+              </div>
+
+              {category.is_paid && (
+                <div className="bg-gray-50 rounded-lg p-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-600">Total Cost:</span>
+                    <span className="font-semibold text-gray-900">
+                      {totalCost} tokens
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs mt-1">
+                    <span className="text-gray-600">Your Balance:</span>
+                    <span className="font-semibold" style={{ color: pageColor }}>
+                      {userBalance} tokens
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setShowVoteModal(false)}
+                  className="flex-1 py-2 border border-gray-300 text-gray-700 rounded font-medium hover:bg-gray-50 transition text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleVote}
+                  disabled={voting === selectedNominee.id || (category.is_paid && userBalance < totalCost)}
+                  className="flex-1 py-2 text-white rounded font-medium transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 text-xs"
+                  style={{ backgroundColor: pageColor }}
+                >
+                  {voting === selectedNominee.id ? (
+                    <>
+                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Voting...
+                    </>
+                  ) : (
+                    <>
+                      <Vote className="w-3 h-3" />
+                      Vote Now
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    );
   };
 
-  // Analytics view effect
-  useEffect(() => {
-    if (activeView === "analytics") {
-      getAllNomineesForAnalytics().then(setNominees);
-    }
-  }, [activeView, categories]);
+  const NomineeCard = ({ nominee, index }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: index * 0.1 }}
+        className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+      >
+        <div className="relative">
+          {nominee.image_url ? (
+            <img 
+              src={nominee.image_url} 
+              alt={nominee.name}
+              className="w-full aspect-square object-cover"
+            />
+          ) : (
+            <div className="w-full aspect-square bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center">
+              <Trophy className="w-6 h-6 text-white opacity-80" />
+            </div>
+          )}
+          
+          {nominee.category?.is_public_vote && index < 3 && (
+            <div className="absolute top-2 left-2">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold ${
+                index === 0 ? 'bg-yellow-500' :
+                index === 1 ? 'bg-gray-400' :
+                'bg-orange-500'
+              }`}>
+                <Crown className="w-2 h-2" />
+              </div>
+            </div>
+          )}
+
+          {nominee.category?.is_public_vote && (
+            <div className="absolute top-2 right-2">
+              <div className="bg-black bg-opacity-70 text-white px-1 py-0.5 rounded text-xs font-medium flex items-center gap-0.5">
+                <TrendingUp className="w-2 h-2" />
+                {nominee.vote_count || 0}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="p-3">
+          <h3 className="font-semibold text-gray-900 text-sm mb-1">{nominee.name}</h3>
+          
+          {nominee.location && (
+            <div className="flex items-center gap-1 text-gray-600 text-xs mb-1">
+              <MapPin className="w-2 h-2" />
+              <span>{nominee.location}</span>
+            </div>
+          )}
+
+          <div className="text-gray-700 text-xs mb-2">
+            {isExpanded ? (
+              <p>{nominee.description}</p>
+            ) : (
+              <p className="line-clamp-2">
+                {nominee.description?.substring(0, 70)}
+                {nominee.description?.length > 70 && "..."}
+              </p>
+            )}
+            {nominee.description?.length > 70 && (
+              <button 
+                className="text-blue-600 text-xs font-medium mt-0.5"
+                onClick={() => setIsExpanded(!isExpanded)}
+              >
+                {isExpanded ? "Show less" : "Read more"}
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={() => openVoteModal(nominee, nominee.category)}
+            disabled={!nominee.category?.is_active || !user}
+            className="w-full py-1.5 text-white rounded font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+            style={{ 
+              backgroundColor: nominee.category?.is_active && user ? pageColor : '#9CA3AF'
+            }}
+          >
+            {!user ? (
+              "Login to Vote"
+            ) : !nominee.category?.is_active ? (
+              "Voting Closed"
+            ) : (
+              <div className="flex items-center justify-center gap-1">
+                <Sparkles className="w-2 h-2" />
+                Cast Vote
+              </div>
+            )}
+          </button>
+        </div>
+      </motion.div>
+    );
+  };
+
+  const CategorySection = ({ category }) => {
+    const categoryNominees = nominees.filter(n => n.category_id === category.id);
+
+    return (
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-8"
+      >
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">{category.name}</h2>
+              {category.description && (
+                <p className="text-gray-600 text-sm">{category.description}</p>
+              )}
+            </div>
+            
+            {category.vote_begin && category.vote_end && (
+              <div className="flex-shrink-0">
+                <CountdownTimer 
+                  startDate={category.vote_begin} 
+                  endDate={category.vote_end} 
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {categoryNominees.length > 0 ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {categoryNominees.map((nominee, index) => (
+              <NomineeCard 
+                key={nominee.id} 
+                nominee={nominee} 
+                index={index} 
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 bg-gray-50 rounded-lg">
+            <Award className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+            <p className="text-gray-600 text-sm">No nominees yet</p>
+          </div>
+        )}
+      </motion.section>
+    );
+  };
 
   if (!event) {
     return (
-      <div className="text-center py-12">
-        <Award className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">
-          Event Not Found
-        </h3>
-        <p className="text-gray-600">
-          Please select a valid event to view awards.
-        </p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="text-center">
+          <Award className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+          <h3 className="text-sm font-semibold text-gray-900 mb-1">Event Not Found</h3>
+          <p className="text-gray-600 text-xs">Please select a valid event</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-6">
-      {/* Header */}
-      <div className="text-center mb-8">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="inline-flex items-center gap-3 mb-4"
-        >
-          <Award className="w-8 h-8" style={{ color: pageColor }} />
-          <h1 className="text-4xl font-bold text-gray-900">Awards</h1>
-        </motion.div>
-        <p className="text-gray-600 text-lg">Celebrate excellence and cast your votes</p>
-      </div>
-
-      {/* Navigation */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
-        <div className="flex bg-gray-100 rounded-lg p-1">
-          <button
-            onClick={() => {
-              setActiveView("categories");
-              setSelectedCategory(null);
-            }}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeView === "categories" 
-                ? "bg-white text-gray-900 shadow-sm" 
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Categories
-          </button>
-          <button
-            onClick={() => setActiveView("analytics")}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeView === "analytics" 
-                ? "bg-white text-gray-900 shadow-sm" 
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Live Rankings
-          </button>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto p-3">
+        {/* Header */}
+        <div className="text-center mb-6">
+          {event.award_title && (
+            <>
+              <h1 className="text-xl md:text-3xl font-bold text-gray-900 mb-2">
+                {event.award_title}
+              </h1>
+              {event.award_description && (
+                <p className="text-gray-600 text-xs md:text-sm">
+                  {event.award_description}
+                </p>
+              )}
+            </>
+          )}
         </div>
 
+        {/* Navigation & Balance - Desktop only, only for authenticated users */}
         {user && (
-          <div className="flex items-center gap-4 text-sm">
-            <span className="text-gray-600">Your Balance:</span>
-            <span className="flex items-center gap-1 font-semibold" style={{ color: pageColor }}>
-              <Coins className="w-4 h-4" />
-              {userBalance.toLocaleString()} tokens
-            </span>
-          </div>
-        )}
+          <div className="hidden sm:flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 mb-6">
+            <div className="flex bg-white rounded shadow-sm p-0.5">
+              <button
+                onClick={() => setActiveView("categories")}
+                className={`px-4 py-2 rounded text-xs font-medium transition-all ${
+                  activeView === "categories" 
+                    ? "bg-blue-600 text-white" 
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Categories
+              </button>
+              <button
+                onClick={() => setActiveView("analytics")}
+                className={`px-4 py-2 rounded text-xs font-medium transition-all ${
+                  activeView === "analytics" 
+                    ? "bg-blue-600 text-white" 
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Rankings
+              </button>
+            </div>
 
-        {selectedCategory && (
-          <button
-            onClick={() => {
-              setSelectedCategory(null);
-              setNominees([]);
-            }}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-          >
-            ← Back to Categories
-          </button>
-        )}
-      </div>
-
-      {/* Categories View */}
-      {activeView === "categories" && !selectedCategory && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-        >
-          {categories.map((category, index) => (
-            <motion.div
-              key={category.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              whileHover={{ y: -5, scale: 1.02 }}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer hover:shadow-lg transition-all"
-            >
-              {/* Category Banner */}
-              {category.category_image && (
-                <div className="h-32 bg-gray-200 overflow-hidden">
-                  <img 
-                    src={category.category_image} 
-                    alt={category.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
-              
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">{category.name}</h3>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    category.is_active 
-                      ? 'bg-green-100 text-green-800' 
-                      : new Date(category.vote_begin) > new Date()
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {category.is_active 
-                      ? 'Active' 
-                      : new Date(category.vote_begin) > new Date()
-                        ? 'Upcoming'
-                        : 'Ended'
-                    }
-                  </span>
-                </div>
-                
-                {category.description && (
-                  <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                    {category.description}
-                  </p>
-                )}
-                
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-1">
-                      {category.is_paid ? (
-                        <Coins className="w-4 h-4 text-green-600" />
-                      ) : (
-                        <Vote className="w-4 h-4 text-blue-600" />
-                      )}
-                      <span className={category.is_paid ? 'text-green-600 font-medium' : 'text-blue-600 font-medium'}>
-                        {category.is_paid ? `${category.vote_amount} tokens per vote` : 'Free Voting'}
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center gap-1">
-                      {category.is_public_vote ? <Eye className="w-4 h-4 text-gray-500" /> : <EyeOff className="w-4 h-4 text-gray-500" />}
-                    </div>
-                  </div>
-
-                  {category.is_active && category.vote_end && (
-                    <CountdownTimer targetDate={category.vote_end} />
-                  )}
-
-                  <button
-                    onClick={() => {
-                      setSelectedCategory(category);
-                      fetchNominees(category.id);
-                    }}
-                    className="w-full py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Users size={16} />
-                    View Nominees
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
-      )}
-
-      {/* Nominees View */}
-      {activeView === "categories" && selectedCategory && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="space-y-6"
-        >
-          {/* Category Header */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">{selectedCategory.name}</h2>
-                {selectedCategory.description && (
-                  <p className="text-gray-600 mt-1">{selectedCategory.description}</p>
-                )}
-                <div className="flex flex-wrap gap-3 mt-3">
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    selectedCategory.is_active 
-                      ? 'bg-green-100 text-green-800' 
-                      : new Date(selectedCategory.vote_begin) > new Date()
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {selectedCategory.is_active 
-                      ? 'Voting Active' 
-                      : new Date(selectedCategory.vote_begin) > new Date()
-                        ? 'Voting Starts Soon'
-                        : 'Voting Ended'
-                    }
-                  </span>
-                  <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm font-medium flex items-center gap-1">
-                    {selectedCategory.is_paid ? (
-                      <Coins className="w-4 h-4" />
-                    ) : (
-                      <Vote className="w-4 h-4" />
-                    )}
-                    {selectedCategory.is_paid ? `Paid - ${selectedCategory.vote_amount} tokens per vote` : 'Free Voting'}
-                  </span>
-                  <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm font-medium flex items-center gap-1">
-                    {selectedCategory.is_public_vote ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                    {selectedCategory.is_public_vote ? 'Public Votes' : 'Private Votes'}
-                  </span>
-                </div>
-              </div>
-
-              {selectedCategory.is_active && selectedCategory.vote_end && (
-                <CountdownTimer targetDate={selectedCategory.vote_end} />
-              )}
+            <div className="flex items-center gap-2 bg-white rounded shadow-sm px-3 py-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-gray-600 text-xs">Balance:</span>
+              <span className="flex items-center gap-1 font-semibold text-xs" style={{ color: pageColor }}>
+                <Coins className="w-3 h-3" />
+                {userBalance}
+              </span>
             </div>
           </div>
+        )}
 
-          {/* Nominees Grid - 5 columns on desktop, 2 on mobile */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {nominees.map((nominee, index) => (
-              <motion.div
-                key={nominee.id}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: index * 0.1 }}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all"
-              >
-                <div className="relative">
-                  {nominee.image_url ? (
-                    <img 
-                      src={nominee.image_url} 
-                      alt={nominee.name}
-                      className="w-full h-32 object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-32 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
-                      <Award className="w-8 h-8 text-gray-400" />
-                    </div>
-                  )}
-                  
-                  {/* Ranking Badge */}
-                  {selectedCategory.is_public_vote && index < 3 && (
-                    <div className="absolute top-2 left-2">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold ${
-                        index === 0 ? 'bg-yellow-500' :
-                        index === 1 ? 'bg-gray-500' :
-                        'bg-orange-500'
-                      }`}>
-                        {index + 1}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Vote Count */}
-                  {selectedCategory.is_public_vote && (
-                    <div className="absolute bottom-2 left-2">
-                      <span className="bg-black bg-opacity-70 text-white px-2 py-1 rounded-full text-xs font-medium">
-                        {nominee.vote_count || 0}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-3">
-                  <h3 className="font-semibold text-gray-900 text-sm mb-1 truncate">{nominee.name}</h3>
-                  
-                  {nominee.location && (
-                    <div className="flex items-center gap-1 text-gray-600 text-xs mb-2">
-                      <MapPin className="w-3 h-3" />
-                      <span className="truncate">{nominee.location}</span>
-                    </div>
-                  )}
-
-                  {nominee.description && (
-                    <p className="text-gray-600 text-xs line-clamp-2 mb-3">
-                      {nominee.description}
-                    </p>
-                  )}
-
-                  <button
-                    onClick={() => handleVote(nominee)}
-                    disabled={!selectedCategory.is_active || voting === nominee.id || !user}
-                    className="w-full py-2 text-white rounded-lg font-semibold text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
-                    style={{ 
-                      backgroundColor: selectedCategory.is_active && user ? pageColor : '#9CA3AF'
-                    }}
-                  >
-                    {voting === nominee.id ? (
-                      <div className="flex items-center justify-center gap-1">
-                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Voting...
-                      </div>
-                    ) : !user ? (
-                      "Login to Vote"
-                    ) : !selectedCategory.is_active ? (
-                      "Closed"
-                    ) : (
-                      <div className="flex items-center justify-center gap-1">
-                        <Vote className="w-3 h-3" />
-                        {selectedCategory.is_paid ? `Vote (${selectedCategory.vote_amount})` : 'Vote Free'}
-                      </div>
-                    )}
-                  </button>
-                </div>
-              </motion.div>
+        {/* Categories View */}
+        {activeView === "categories" && (
+          <div className="space-y-6">
+            {categories.map((category, index) => (
+              <CategorySection 
+                key={category.id} 
+                category={category} 
+              />
             ))}
           </div>
+        )}
 
-          {nominees.length === 0 && (
-            <div className="text-center py-12">
-              <Award className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                No Nominees Yet
-              </h3>
-              <p className="text-gray-600">
-                Check back later for nominees in this category.
-              </p>
+        {/* Analytics View */}
+        {activeView === "analytics" && (
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp className="w-4 h-4 text-blue-600" />
+              <h2 className="text-sm font-semibold text-gray-900">Live Rankings</h2>
             </div>
-          )}
-        </motion.div>
-      )}
-
-      {/* Analytics/Live Rankings View */}
-      {activeView === "analytics" && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Live Rankings</h2>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {categories.map(category => {
-                // Filter nominees by category and sort by vote count
                 const categoryNominees = nominees
                   .filter(n => n.category_id === category.id)
                   .sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0))
-                  .slice(0, 5);
+                  .slice(0, 3);
 
                 return (
-                  <div key={category.id} className="bg-gray-50 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-3">{category.name}</h3>
+                  <div key={category.id} className="bg-gray-50 rounded-lg p-3">
+                    <h3 className="font-semibold text-gray-900 text-xs mb-2">
+                      {category.name}
+                    </h3>
                     <div className="space-y-2">
                       {categoryNominees.map((nominee, index) => (
-                        <div key={nominee.id} className="flex items-center gap-3 p-2 bg-white rounded-lg">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                        <div key={nominee.id} className="flex items-center gap-2 p-2 bg-white rounded">
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold ${
                             index === 0 ? 'bg-yellow-500' :
-                            index === 1 ? 'bg-gray-500' :
-                            index === 2 ? 'bg-orange-500' :
-                            'bg-blue-500'
+                            index === 1 ? 'bg-gray-400' :
+                            'bg-orange-500'
                           }`}>
                             {index + 1}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900 truncate">{nominee.name}</p>
+                            <p className="font-medium text-gray-900 text-xs truncate">{nominee.name}</p>
                             {category.is_public_vote && (
-                              <p className="text-sm text-gray-600">{nominee.vote_count || 0} votes</p>
+                              <p className="text-gray-600 text-xs">
+                                {nominee.vote_count || 0} votes
+                              </p>
                             )}
                           </div>
-                          {index === 0 && categoryNominees.length > 0 && (
-                            <Crown className="w-4 h-4 text-yellow-500" />
-                          )}
                         </div>
                       ))}
                     </div>
                     {categoryNominees.length === 0 && (
-                      <p className="text-gray-500 text-sm text-center py-4">No nominees yet</p>
+                      <p className="text-gray-500 text-xs text-center py-2">No nominees yet</p>
                     )}
                   </div>
                 );
               })}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Empty State */}
-      {activeView === "categories" && !selectedCategory && categories.length === 0 && (
-        <div className="text-center py-12">
-          <Award className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            No Award Categories Yet
-          </h3>
-          <p className="text-gray-600">
-            Award categories will be available soon.
-          </p>
-        </div>
-      )}
+        {/* Empty State */}
+        {activeView === "categories" && categories.length === 0 && (
+          <div className="text-center py-12">
+            <Award className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">No Categories Yet</h3>
+            <p className="text-gray-600 text-xs">Award categories coming soon</p>
+          </div>
+        )}
+      </div>
+
+      {/* Vote Modal */}
+      <VoteModal />
     </div>
   );
 }

@@ -23,6 +23,18 @@ import {
   Facebook,
   Twitter,
   LogOut,
+  BookOpen,
+  // ADDED: Feature icons
+  Layout,
+  Vote,
+  Ticket,
+  FormInput,
+  BarChart3,
+  CreditCard,
+  Calendar,
+  Wallet,
+  Shield,
+  Zap,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -45,6 +57,40 @@ const socialMedia = [
   { icon: Instagram, href: "https://instagram.com/gleedz", label: "Instagram" },
   { icon: Facebook, href: "https://facebook.com/gleedz", label: "Facebook" },
   { icon: Twitter, href: "https://twitter.com/gleedz", label: "X (Twitter)" },
+];
+
+// Features data
+const features = [
+  {
+    icon: Layout,
+    title: "WebApp Event Pages",
+    description: "Professional event pages with customizable headers and navigation"
+  },
+  {
+    icon: Vote,
+    title: "Smart Voting System",
+    description: "Free & paid voting with direct wallet integration"
+  },
+  {
+    icon: Ticket,
+    title: "Ticket Sales Portal",
+    description: "Customizable ticket sales with multiple pricing tiers"
+  },
+  {
+    icon: FormInput,
+    title: "Registration Forms",
+    description: "Up to 3 customizable forms per event"
+  },
+  {
+    icon: Award,
+    title: "Award Portal",
+    description: "Dedicated system for competitions and contests"
+  },
+  {
+    icon: BarChart3,
+    title: "Smart Dashboards",
+    description: "Real-time analytics for publishers and fans"
+  }
 ];
 
 export default function HomeClient({ logoUrl, posters }) {
@@ -251,7 +297,7 @@ export default function HomeClient({ logoUrl, posters }) {
     fetchUserData();
   }, []);
 
-  // Fetch top events - UPDATED: Only fetch active events
+  // Fetch top events - UPDATED: Only fetch active events and limit to 6
   useEffect(() => {
     const fetchTopEvents = async () => {
       try {
@@ -262,7 +308,8 @@ export default function HomeClient({ logoUrl, posters }) {
           .eq("launch", true)
           .eq("active", true) // UPDATED: Only fetch active events
           .not("promote", "is", null)
-          .order("promote", { ascending: false });
+          .order("promote", { ascending: false })
+          .limit(6); // UPDATED: Limit to 6 events
 
         if (error) {
           console.error("Error fetching top events:", error);
@@ -741,11 +788,20 @@ export default function HomeClient({ logoUrl, posters }) {
             </div>
           )}
 
-          {/* Right side: TV + UserCircle/Profile with Logout Dropdown */}
+          {/* Right side: TV + BookOpen + UserCircle/Profile with Logout Dropdown */}
           <div className="flex gap-4 items-center">
+            {/* TV Icon */}
             <Link href="/gleedztv" className="text-white hover:scale-110 transition">
               <Tv className="w-6 h-6 cursor-pointer" />
             </Link>
+
+            {/* ADDED: BookOpen Icon */}
+            <button 
+              onClick={() => router.push("/gleedz")}
+              className="text-white hover:scale-110 transition"
+            >
+              <BookOpen className="w-6 h-6 cursor-pointer" />
+            </button>
 
             <div className="relative" ref={dropdownRef}>
               <div
@@ -1071,6 +1127,44 @@ export default function HomeClient({ logoUrl, posters }) {
                 <p className="text-gray-500 mt-2">Check back later for featured events!</p>
               </div>
             )}
+          </section>
+
+          {/* ADDED: Features Section */}
+          <section className="mt-16">
+            <div className="text-center mb-8 md:mb-12">
+              <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-yellow-800 mb-4">
+                Powerful Event Features
+              </h2>
+              <p className="text-base md:text-lg text-gray-600 max-w-2xl mx-auto">
+                Everything you need to create outstanding event experiences, all in one platform
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+              {features.map((feature, index) => {
+                const Icon = feature.icon;
+                return (
+                  <motion.div
+                    key={feature.title}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    whileHover={{ y: -5 }}
+                    className="bg-white border border-gray-200 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-lg hover:shadow-xl transition-all duration-300 group"
+                  >
+                    <div className="w-10 h-10 md:w-12 md:h-12 bg-yellow-500 rounded-lg md:rounded-xl flex items-center justify-center mb-3 md:mb-4 group-hover:scale-110 transition-transform duration-300">
+                      <Icon className="w-5 h-5 md:w-6 md:h-6 text-white" />
+                    </div>
+                    <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-2 md:mb-3">
+                      {feature.title}
+                    </h3>
+                    <p className="text-sm md:text-base text-gray-600 leading-relaxed">
+                      {feature.description}
+                    </p>
+                  </motion.div>
+                );
+              })}
+            </div>
           </section>
 
           {/* Testimonials */}
