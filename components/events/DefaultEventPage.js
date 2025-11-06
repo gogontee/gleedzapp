@@ -4,9 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Calendar, Award, Users, Ticket, Star, Sun, House, Briefcase, ChevronLeft, ChevronRight, Play, Pause, Share2, Heart, MapPin, Clock, Eye, Crown, Sparkles, Menu, Newspaper, Mail, Phone, Map, Facebook, Twitter, Instagram, Linkedin } from "lucide-react";
+import { 
+  Calendar, Award, Users, Ticket, Star, Sun, House, Briefcase, 
+  ChevronLeft, ChevronRight, Play, Pause, Share2, Heart, MapPin, 
+  Clock, Eye, Crown, Sparkles, Menu, Newspaper, Mail, Phone, Map, 
+  Facebook, Twitter, Instagram, Linkedin, Coins, Gem, Medal, Trophy, 
+  Landmark, ChevronDown, DollarSign, Euro, IndianRupee, JapaneseYen, 
+  PoundSterling, Key, Target, Car, Key as KeyIcon, Gallery, Download,
+  Image as ImageIcon, Video, Music, Mic, Camera, Flag, Globe, Lock,
+  Unlock, Settings, User, Users as UsersIcon, Phone as PhoneIcon,
+  Mail as MailIcon, Map as MapIcon
+} from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
-import EventHeader from "../../components/EventHeader"; // Import EventHeader
+import EventHeader from "../../components/EventHeader";
 
 export default function DefaultEventPage({ event }) {
   // ---------- dynamic hero slides ----------
@@ -64,6 +74,91 @@ export default function DefaultEventPage({ event }) {
     }
   }, [user, event]);
 
+  // ---------- COMPLETE ICON MAPPING FUNCTION ----------
+  const getIconComponent = (iconName) => {
+    const iconMap = {
+      // Basic icons
+      Users: Users,
+      User: User,
+      Award: Award,
+      Ticket: Ticket,
+      Eye: Eye,
+      Star: Star,
+      House: House,
+      Car: Car,
+      Key: Key,
+      Gem: Gem,
+      Pause: Pause,
+      Newspaper: Newspaper,
+      Medal: Medal,
+      Trophy: Trophy,
+      Landmark: Landmark,
+      ChevronDown: ChevronDown,
+      Coins: Coins,
+      DollarSign: DollarSign,
+      Euro: Euro,
+      IndianRupee: IndianRupee,
+      JapaneseYen: JapaneseYen,
+      PoundSterling: PoundSterling,
+      Calendar: Calendar,
+      Sun: Sun,
+      Target: Target,
+      
+      // Additional icons for better coverage
+      Briefcase: Briefcase,
+      MapPin: MapPin,
+      Clock: Clock,
+      Crown: Crown,
+      Sparkles: Sparkles,
+      Menu: Menu,
+      Mail: Mail,
+      Phone: Phone,
+      Map: Map,
+      Facebook: Facebook,
+      Twitter: Twitter,
+      Instagram: Instagram,
+      Linkedin: Linkedin,
+      Gallery: Gallery,
+      Download: Download,
+      Image: ImageIcon,
+      Video: Video,
+      Music: Music,
+      Mic: Mic,
+      Camera: Camera,
+      Flag: Flag,
+      Globe: Globe,
+      Lock: Lock,
+      Unlock: Unlock,
+      Settings: Settings,
+      
+      // Fallbacks and aliases
+      UsersIcon: Users,
+      PhoneIcon: Phone,
+      MailIcon: Mail,
+      MapIcon: Map,
+      KeyIcon: Key,
+    };
+    
+    return iconMap[iconName] || Users; // Fallback to Users icon if not found
+  };
+
+  // ---------- Safe URL extractor function ----------
+  const getSafeUrl = (url) => {
+    if (typeof url === 'string') return url;
+    if (url && typeof url === 'object' && url.src) return url.src;
+    if (url && typeof url === 'object' && url.url) return url.url;
+    return '';
+  };
+
+  // ---------- Check if file is video ----------
+  const isVideoFile = (url) => {
+    const actualUrl = typeof url === 'string' ? url : url?.src || '';
+    if (!actualUrl || typeof actualUrl !== 'string') return false;
+    
+    const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi'];
+    return videoExtensions.some(ext => actualUrl.toLowerCase().includes(ext));
+  };
+
   const checkAuth = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -114,7 +209,6 @@ export default function DefaultEventPage({ event }) {
     setFavoriteLoading(true);
 
     try {
-      // Get current user data
       const { data: userData, error: fetchError } = await supabase
         .from('users')
         .select('favorite_events')
@@ -127,7 +221,6 @@ export default function DefaultEventPage({ event }) {
 
       const currentFavorites = userData?.favorite_events || [];
 
-      // Check if event is already in favorites
       if (currentFavorites.includes(event.id)) {
         showCustomAlert(
           "Already in Favorites", 
@@ -138,14 +231,12 @@ export default function DefaultEventPage({ event }) {
         return;
       }
 
-      // Ask for confirmation
       const confirmed = window.confirm(`Do you want to add "${event.name}" to your favorite events?`);
       
       if (!confirmed) {
         return;
       }
 
-      // Add event to favorites
       const updatedFavorites = [...currentFavorites, event.id];
 
       const { error: updateError } = await supabase
@@ -177,7 +268,6 @@ export default function DefaultEventPage({ event }) {
   };
 
   const showCustomAlert = (title, message, type) => {
-    // Create a custom alert element
     const alertDiv = document.createElement('div');
     alertDiv.className = `fixed top-20 right-4 z-50 p-4 rounded-lg shadow-lg border-l-4 max-w-sm transform transition-transform duration-300 ${
       type === 'success' ? 'bg-green-50 border-green-500 text-green-800' :
@@ -203,7 +293,6 @@ export default function DefaultEventPage({ event }) {
 
     document.body.appendChild(alertDiv);
 
-    // Auto remove after 5 seconds
     setTimeout(() => {
       if (alertDiv.parentElement) {
         alertDiv.remove();
@@ -220,8 +309,8 @@ export default function DefaultEventPage({ event }) {
       .select('*')
       .eq('event_id', event.id)
       .eq('approved', true)
-      .order('points', { ascending: false }) // Order by points instead of votes
-      .limit(4); // Limit to top 4 candidates
+      .order('points', { ascending: false })
+      .limit(4);
 
     if (!error && data) {
       setCandidates(data);
@@ -260,7 +349,6 @@ export default function DefaultEventPage({ event }) {
 
     if (slide.type === "video") {
       // For videos, rely on video's ended event only
-      // No automatic timeout for videos - they play full length
     } else {
       // For images, auto-advance after 5000ms
       heroTimerRef.current = setTimeout(() => {
@@ -298,7 +386,6 @@ export default function DefaultEventPage({ event }) {
 
     if (isVideo) {
       // For videos, rely on video's ended event only
-      // No automatic timeout for videos
     } else {
       // For images, auto-advance after 5000ms
       posterTimerRef.current = setTimeout(() => {
@@ -350,7 +437,6 @@ export default function DefaultEventPage({ event }) {
         console.log('Error sharing:', error);
       }
     } else {
-      // Fallback: copy to clipboard
       navigator.clipboard.writeText(window.location.href);
       alert('Event link copied to clipboard!');
     }
@@ -362,7 +448,7 @@ export default function DefaultEventPage({ event }) {
       ? new Date(`${activity.date}T${activity.time}`)
       : new Date();
     
-    const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000); // 2 hours duration
+    const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
     
     const calendarData = {
       title: activity.title,
@@ -372,13 +458,10 @@ export default function DefaultEventPage({ event }) {
       end: endDate
     };
 
-    // Google Calendar
     const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(calendarData.title)}&details=${encodeURIComponent(calendarData.description)}&location=${encodeURIComponent(calendarData.location)}&dates=${startDate.toISOString().replace(/[-:]/g, '').split('.')[0]}Z/${endDate.toISOString().replace(/[-:]/g, '').split('.')[0]}Z`;
     
-    // Outlook Calendar
     const outlookUrl = `https://outlook.live.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(calendarData.title)}&body=${encodeURIComponent(calendarData.description)}&location=${encodeURIComponent(calendarData.location)}&startdt=${startDate.toISOString()}&enddt=${endDate.toISOString()}`;
     
-    // Download ICS file
     const icsContent = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
@@ -395,7 +478,6 @@ export default function DefaultEventPage({ event }) {
     const icsBlob = new Blob([icsContent], { type: 'text/calendar' });
     const icsUrl = URL.createObjectURL(icsBlob);
     
-    // Show calendar options
     const calendarChoice = window.confirm(
       'Choose calendar option:\n\nOK - Open Google Calendar\nCancel - Download ICS File'
     );
@@ -411,27 +493,6 @@ export default function DefaultEventPage({ event }) {
       document.body.removeChild(link);
       URL.revokeObjectURL(icsUrl);
     }
-  };
-
-  // ---------- icon mapping ----------
-  const getIconComponent = (iconName) => {
-    const iconMap = {
-      award: Award,
-      users: Users,
-      ticket: Ticket,
-      briefcase: Briefcase,
-      sun: Sun,
-      house: House, 
-      calendar: Calendar,
-      eye: Eye,
-      star: Star,
-    };
-    return iconMap[iconName] || Star;
-  };
-
-  // ---------- check if file is video ----------
-  const isVideoFile = (url) => {
-    return /\.(mp4|webm|ogg|mov|avi)$/i.test(url);
   };
 
   // ---------- get first 30 words from description ----------
@@ -544,7 +605,7 @@ export default function DefaultEventPage({ event }) {
       <EventHeader event={event} />
       
       {/* Main Content with padding top for header spacing */}
-      <div className="pt-18"> {/* Added pt-18 for spacing below fixed header */}
+      <div className="pt-18">
         
         {/* ENHANCED HERO SECTION WITH FULL LENGTH VIDEO SUPPORT */}
         <section className="relative w-full h-[50vh] md:h-[60vh] overflow-hidden">
@@ -641,7 +702,7 @@ export default function DefaultEventPage({ event }) {
         </section>
 
         {/* ENHANCED STATS SECTION - Centered and pushed downward */}
-        {stats.length > 0 && (
+        {stats && stats.length > 0 && (
           <section className="max-w-7xl mx-auto px-4 md:px-8 mt-8 relative z-30">
             <motion.div 
               className={`bg-white rounded-2xl shadow-xl p-4 md:p-6 grid ${getStatsGridClass()} gap-3 md:gap-6 border border-gold-100/50`}
@@ -650,10 +711,11 @@ export default function DefaultEventPage({ event }) {
               transition={{ duration: 0.6 }}
             >
               {stats.map((stat, index) => {
+                // Dynamically get the icon component from the stat.icon value
                 const IconComponent = getIconComponent(stat.icon);
                 return (
                   <motion.div 
-                    key={stat.title}
+                    key={`${stat.title}-${index}`}
                     className="flex items-center gap-3 p-2 md:p-4 rounded-xl bg-gradient-to-br from-slate-50 to-white border border-slate-100 hover:shadow-lg transition-all duration-300"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -666,8 +728,12 @@ export default function DefaultEventPage({ event }) {
                       <IconComponent className="w-4 h-4 md:w-6 md:h-6 text-white" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm md:text-xl font-bold text-gray-900">{stat.number}</div>
-                      <div className="text-xs md:text-sm text-gray-500 font-medium truncate">{stat.title}</div>
+                      <div className="text-sm md:text-xl font-bold text-gray-900">
+                        {stat.number}
+                      </div>
+                      <div className="text-xs md:text-sm text-gray-500 font-medium truncate">
+                        {stat.title}
+                      </div>
                     </div>
                   </motion.div>
                 );
@@ -729,12 +795,13 @@ export default function DefaultEventPage({ event }) {
                           {posters.map((poster, i) => {
                             if (i !== posterIndex) return null;
                             
-                            const isVideo = isVideoFile(poster);
+                            const actualUrl = getSafeUrl(poster);
+                            const isVideo = isVideoFile(actualUrl);
                             
                             return isVideo ? (
                               <motion.video
                                 key={i}
-                                src={poster}
+                                src={actualUrl}
                                 className="w-full h-full object-cover"
                                 autoPlay
                                 muted
@@ -755,7 +822,7 @@ export default function DefaultEventPage({ event }) {
                                 transition={{ duration: 0.5 }}
                               >
                                 <Image 
-                                  src={poster} 
+                                  src={actualUrl} 
                                   alt={`Event Visual ${i + 1}`} 
                                   fill 
                                   className="object-cover" 
@@ -795,22 +862,23 @@ export default function DefaultEventPage({ event }) {
                           <div 
                             ref={sponsorsRef}
                             className="relative overflow-hidden bg-white rounded-xl border border-gold-100/50"
-                            style={{ height: '120px' }} // h-2 by w-6 ratio (120px height for 360px width equivalent)
+                            style={{ height: '120px' }}
                           >
                             <div className="flex items-center h-full animate-scroll gap-6 py-4">
                               {/* Duplicate sponsors for seamless loop */}
                               {[...sponsors, ...sponsors].map((sponsor, index) => {
-                                const isVideo = isVideoFile(sponsor);
+                                const actualUrl = getSafeUrl(sponsor);
+                                const isVideo = isVideoFile(actualUrl);
                                 
                                 return (
                                   <div 
                                     key={index} 
                                     className="flex-shrink-0 flex items-center justify-center px-2"
-                                    style={{ minWidth: '150px' }} // Adjust width as needed
+                                    style={{ minWidth: '150px' }}
                                   >
                                     {isVideo ? (
                                       <video
-                                        src={sponsor}
+                                        src={actualUrl}
                                         className="max-h-16 object-contain rounded-lg"
                                         autoPlay
                                         muted
@@ -818,9 +886,9 @@ export default function DefaultEventPage({ event }) {
                                         playsInline
                                       />
                                     ) : (
-                                      <div className="relative h-16 w-24"> {/* Adjust size as needed */}
+                                      <div className="relative h-16 w-24">
                                         <Image 
-                                          src={sponsor} 
+                                          src={actualUrl} 
                                           alt={`Sponsor ${index + 1}`}
                                           fill
                                           className="object-contain rounded-lg"

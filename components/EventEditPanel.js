@@ -10,6 +10,9 @@ import {
   X, 
   Save, 
   Trash2, 
+  Globe,
+  Crown,
+  Mappin,
   Plus,
   Minus,
   CheckCircle,
@@ -25,10 +28,177 @@ import {
   Download,
   Share2,
   Heart,
-  Eye
+  Eye,
+  House,
+  Car,
+  Gem,
+  Medal,
+  Trophy,
+  Landmark,
+  Users,
+  Award,
+  Star,
+  DollarSign,
+  Euro,
+  IndianRupee,
+  JapaneseYen,
+  PoundSterling,
+  ChevronDown,
+  Sun,
+  Key,
+  Target
 } from "lucide-react";
+
 import { motion, AnimatePresence } from "framer-motion";
 import FormPanel from "./FormPanel"; // Import the FormPanel component
+
+// Add this component before EventEditPanel
+const StatItemWithModal = ({ stat, index, onUpdate, onRemove }) => {
+  const [showIconModal, setShowIconModal] = useState(false);
+
+  const icons = [
+    { name: 'Users', icon: Users },
+    { name: 'Award', icon: Award },
+    { name: 'Ticket', icon: Ticket },
+    { name: 'Eye', icon: Eye },
+    { name: 'Star', icon: Star },
+    { name: 'House', icon: House },
+    { name: 'Car', icon: Car },
+    { name: 'Key', icon: Key },
+    { name: 'Gem', icon: Gem },
+    { name: 'Pause', icon: Pause },
+    { name: 'Crown', icon: Crown },
+    { name: 'Globe', icon: Globe },
+    { name: 'Newspaper', icon: Newspaper },
+    { name: 'Medal', icon: Medal },
+    { name: 'Trophy', icon: Trophy },
+    { name: 'Landmark', icon: Landmark },
+    { name: 'ChevronDown', icon: ChevronDown },
+    { name: 'Coins', icon: Coins },
+    { name: 'DollarSign', icon: DollarSign },
+    { name: 'Euro', icon: Euro },
+    { name: 'IndianRupee', icon: IndianRupee },
+    { name: 'JapaneseYen', icon: JapaneseYen },
+    { name: 'PoundSterling', icon: PoundSterling },
+    { name: 'Calendar', icon: Calendar },
+    { name: 'Sun', icon: Sun },
+    { name: 'Target', icon: Target },
+  ];
+
+  const SelectedIcon = icons.find(i => i.name === stat.icon)?.icon || Users;
+
+  return (
+    <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg">
+      {/* Custom Icon Selector */}
+      <div className="relative">
+        <button
+          type="button"
+          className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-yellow-500 text-sm md:text-base transition-colors"
+          onClick={() => setShowIconModal(true)}
+        >
+          <SelectedIcon className="w-4 h-4 text-gray-700" />
+          <span className="truncate max-w-[60px]">{stat.icon}</span>
+          <ChevronDown className="w-4 h-4 text-gray-500" />
+        </button>
+      </div>
+
+      <input
+        type="text"
+        value={stat.title}
+        onChange={(e) => onUpdate({ ...stat, title: e.target.value })}
+        placeholder="Stat title"
+        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-sm md:text-base"
+      />
+
+      <input
+        type="text"
+        value={stat.number}
+        onChange={(e) => onUpdate({ ...stat, number: e.target.value })}
+        placeholder="Enter value"
+        className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-sm md:text-base"
+      />
+
+      <button
+        onClick={() => onRemove()}
+        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+      >
+        <Minus className="w-4 h-4" />
+      </button>
+
+      {/* Custom Icon Selection Modal */}
+      {showIconModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-lg md:max-w-2xl max-h-[80vh] flex flex-col"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-200">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900">
+                Select an Icon
+              </h3>
+              <button
+                onClick={() => setShowIconModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Icons Grid */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 gap-2 sm:gap-3">
+                {icons.map((iconItem) => {
+                  const IconComponent = iconItem.icon;
+                  const isSelected = stat.icon === iconItem.name;
+
+                  return (
+                    <button
+                      key={iconItem.name}
+                      type="button"
+                      className={`flex flex-col items-center justify-center p-2 sm:p-3 rounded-lg border-2 transition-all duration-200 ${
+                        isSelected
+                          ? 'bg-yellow-50 border-yellow-400 text-yellow-700 shadow-md scale-105'
+                          : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:shadow-sm'
+                      }`}
+                      onClick={() => {
+                        onUpdate({ ...stat, icon: iconItem.name });
+                        setShowIconModal(false);
+                      }}
+                    >
+                      <IconComponent className="w-5 h-5 sm:w-6 sm:h-6 mb-1 sm:mb-2" />
+                      <span className="text-[10px] sm:text-xs font-medium text-center leading-tight">
+                        {iconItem.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 sm:p-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl text-sm sm:text-base">
+              <div className="flex justify-between items-center">
+                <span className="text-xs sm:text-sm text-gray-600">
+                  {icons.length} icons available
+                </span>
+                <button
+                  onClick={() => setShowIconModal(false)}
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-500 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors text-xs sm:text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 export default function EventEditPanel({ event, onClose, onSave, onDelete }) {
   const [formData, setFormData] = useState({
@@ -920,12 +1090,14 @@ const handleSave = async () => {
     }
   };
 
-  // Check if file is video
-  const isVideoFile = (url) => {
-    if (!url) return false;
-    const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi'];
-    return videoExtensions.some(ext => url.toLowerCase().includes(ext));
-  };
+  // Check if file is video - SAFE VERSION
+const isVideoFile = (url) => {
+  // Handle cases where url is not a string
+  if (!url || typeof url !== 'string') return false;
+  
+  const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi'];
+  return videoExtensions.some(ext => url.toLowerCase().includes(ext));
+};
 
   // Update tabs to include Forms tab
   const tabs = [
@@ -1174,59 +1346,46 @@ const handleSave = async () => {
                   </div>
                 </div>
 
-                {/* Stats Management */}
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Statistics
-                    </label>
-                    <button
-                      onClick={() => addArrayItem('stats', { icon: 'users', title: 'New Stat', number: 0 })}
-                      className="px-3 py-1 bg-yellow-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Stat
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    {getArrayField('stats').map((stat, index) => (
-                      <div key={index} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg">
-                        <select
-                          value={stat.icon}
-                          onChange={(e) => handleArrayFieldChange('stats', index, { ...stat, icon: e.target.value })}
-                          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-sm md:text-base"
-                        >
-                          <option value="users">Users</option>
-                          <option value="award">Award</option>
-                          <option value="ticket">Ticket</option>
-                          <option value="eye">Eye</option>
-                          <option value="star">Star</option>
-                        </select>
-                        <input
-                          type="text"
-                          value={stat.title}
-                          onChange={(e) => handleArrayFieldChange('stats', index, { ...stat, title: e.target.value })}
-                          placeholder="Stat title"
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-sm md:text-base"
-                        />
-                        <input
-                          type="number"
-                          value={stat.number}
-                          onChange={(e) => handleArrayFieldChange('stats', index, { ...stat, number: parseInt(e.target.value) || 0 })}
-                          placeholder="0"
-                          className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-sm md:text-base"
-                        />
-                        <button
-                          onClick={() => removeArrayItem('stats', index)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                {/* Stats Management - FIXED VERSION */}
+<div>
+  <div className="flex items-center justify-between mb-4">
+    <label className="block text-sm font-medium text-gray-700">
+      Statistics
+    </label>
+    <button
+      onClick={() =>
+        addArrayItem('stats', {
+          icon: 'Users',
+          title: 'New Stat',
+          number: '',
+        })
+      }
+      className="px-3 py-1 bg-yellow-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
+    >
+      <Plus className="w-4 h-4" />
+      Add Stat
+    </button>
+  </div>
+
+  <div className="space-y-3">
+    {getArrayField('stats').map((stat, index) => (
+      <StatItemWithModal
+        key={index}
+        stat={stat}
+        index={index}
+        onUpdate={(updatedStat) => {
+          // This properly updates the stats array
+          handleArrayFieldChange('stats', index, updatedStat);
+        }}
+        onRemove={() => {
+          // This properly removes from the stats array
+          removeArrayItem('stats', index);
+        }}
+      />
+    ))}
+  </div>
+</div>
+
               </motion.div>
             )}
 
@@ -1297,22 +1456,22 @@ const handleSave = async () => {
                           </button>
                           
                           {section.src && (
-                            <div className="flex items-center gap-2">
-                              {isVideoFile(section.src) ? (
-                                <div className="relative">
-                                  <video className="w-12 h-12 object-cover rounded" muted>
-                                    <source src={section.src} type="video/mp4" />
-                                  </video>
-                                  <Play className="w-4 h-4 absolute inset-0 m-auto text-white" />
-                                </div>
-                              ) : (
-                                <img src={section.src} alt="Preview" className="w-12 h-12 object-cover rounded" />
-                              )}
-                              <span className="text-sm text-gray-600 truncate max-w-32">
-                                {section.src.split('/').pop()}
-                              </span>
-                            </div>
-                          )}
+  <div className="flex items-center gap-2">
+    {typeof section.src === 'string' && isVideoFile(section.src) ? (
+      <div className="relative">
+        <video className="w-12 h-12 object-cover rounded" muted>
+          <source src={section.src} type="video/mp4" />
+        </video>
+        <Play className="w-4 h-4 absolute inset-0 m-auto text-white" />
+      </div>
+    ) : (
+      <img src={typeof section.src === 'string' ? section.src : ''} alt="Preview" className="w-12 h-12 object-cover rounded" />
+    )}
+    <span className="text-sm text-gray-600 truncate max-w-32">
+      {typeof section.src === 'string' ? section.src.split('/').pop() : 'Invalid URL'}
+    </span>
+  </div>
+)}
                           
                           <button
                             onClick={() => removeArrayItem('hero_sections', index)}
@@ -1396,111 +1555,120 @@ const handleSave = async () => {
 )}
 
             {activeTab === "media" && (
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-4 md:space-y-6"
-              >
-                {/* Logo Upload */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Event Logo
-                  </label>
-                  <div className="flex items-center gap-4">
-                    {formData.logo && (
-                      <img src={formData.logo} alt="Logo" className="w-16 h-16 rounded-lg object-cover" />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleImageSelect('logo')}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
-                    >
-                      <ImageIcon className="w-4 h-4" />
-                      Choose Logo
-                    </button>
-                  </div>
-                </div>
+  <motion.div
+    initial={{ opacity: 0, x: 20 }}
+    animate={{ opacity: 1, x: 0 }}
+    exit={{ opacity: 0, x: -20 }}
+    className="space-y-4 md:space-y-6"
+  >
+    {/* Logo Upload */}
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        Event Logo
+      </label>
+      <div className="flex items-center gap-4">
+        {formData.logo && (
+          <img src={formData.logo} alt="Logo" className="w-16 h-16 rounded-lg object-cover" />
+        )}
+        <button
+          type="button"
+          onClick={() => handleImageSelect('logo')}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
+        >
+          <ImageIcon className="w-4 h-4" />
+          Choose Logo
+        </button>
+      </div>
+    </div>
 
-                {/* Thumbnail Upload */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Event Thumbnail
-                  </label>
-                  <div className="flex items-center gap-4">
-                    {formData.thumbnail && (
-                      <img src={formData.thumbnail} alt="Thumbnail" className="w-32 h-20 rounded-lg object-cover" />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleImageSelect('thumbnail')}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
-                    >
-                      <ImageIcon className="w-4 h-4" />
-                      Choose Thumbnail
-                    </button>
-                  </div>
-                </div>
+    {/* Thumbnail Upload */}
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        Event Thumbnail
+      </label>
+      <div className="flex items-center gap-4">
+        {formData.thumbnail && (
+          <img src={formData.thumbnail} alt="Thumbnail" className="w-32 h-20 rounded-lg object-cover" />
+        )}
+        <button
+          type="button"
+          onClick={() => handleImageSelect('thumbnail')}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
+        >
+          <ImageIcon className="w-4 h-4" />
+          Choose Thumbnail
+        </button>
+      </div>
+    </div>
 
-                {/* Media Groups */}
-                {['group_banner1', 'group_banner2', 'group_poster1'].map(group => (
-                  <div key={group}>
-                    <div className="flex items-center justify-between mb-4">
-                      <label className="block text-sm font-medium text-gray-700 capitalize">
-                        {mediaGroupLabels[group]}
-                      </label>
-                      <button
-                        onClick={() => addArrayItem(group, '')}
-                        className="px-3 py-1 bg-yellow-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add Media
-                      </button>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      {getArrayField(group).map((url, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleImageSelect(group, true, index)}
-                            className="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
-                          >
-                            <ImageIcon className="w-4 h-4" />
-                            Choose File
-                          </button>
-                          
-                          {url && (
-                            <div className="flex items-center gap-2 flex-1">
-                              {isVideoFile(url) ? (
-                                <div className="relative">
-                                  <video className="w-12 h-12 object-cover rounded" muted>
-                                    <source src={url} type="video/mp4" />
-                                  </video>
-                                  <Play className="w-4 h-4 absolute inset-0 m-auto text-white" />
-                                </div>
-                              ) : (
-                                <img src={url} alt="Preview" className="w-12 h-12 object-cover rounded" />
-                              )}
-                              <span className="text-sm text-gray-600 truncate flex-1">
-                                {url.split('/').pop()}
-                              </span>
-                            </div>
-                          )}
-                          
-                          <button
-                            onClick={() => removeArrayItem(group, index)}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                          >
-                            <Minus className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+    {/* Media Groups */}
+    {['group_banner1', 'group_banner2', 'group_poster1'].map(group => (
+      <div key={group}>
+        <div className="flex items-center justify-between mb-4">
+          <label className="block text-sm font-medium text-gray-700 capitalize">
+            {mediaGroupLabels[group]}
+          </label>
+          <button
+            onClick={() => addArrayItem(group, '')}
+            className="px-3 py-1 bg-yellow-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
+          >
+            <Plus className="w-4 h-4" />
+            Add Media
+          </button>
+        </div>
+        
+        <div className="space-y-2">
+          {getArrayField(group).map((url, index) => {
+            // Extract the actual URL from the object
+            const actualUrl = typeof url === 'string' ? url : url?.src || '';
+            
+            return (
+              <div key={index} className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleImageSelect(group, true, index)}
+                  className="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  Choose File
+                </button>
+                
+                {actualUrl && (
+                  <div className="flex items-center gap-2 flex-1">
+                    {isVideoFile(actualUrl) ? (
+                      <div className="relative">
+                        <video className="w-12 h-12 object-cover rounded" muted>
+                          <source src={actualUrl} type="video/mp4" />
+                        </video>
+                        <Play className="w-4 h-4 absolute inset-0 m-auto text-white" />
+                      </div>
+                    ) : (
+                      <img 
+                        src={actualUrl} 
+                        alt="Preview" 
+                        className="w-12 h-12 object-cover rounded" 
+                      />
+                    )}
+                    <span className="text-sm text-gray-600 truncate flex-1">
+                      {actualUrl.split('/').pop()}
+                    </span>
                   </div>
-                ))}
-              </motion.div>
-            )}
+                )}
+                
+                <button
+                  onClick={() => removeArrayItem(group, index)}
+                  className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ))}
+  </motion.div>
+)}
 
             {activeTab === "candidates" && (
   <motion.div
