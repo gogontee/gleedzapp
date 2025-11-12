@@ -708,7 +708,7 @@ export default function DefaultEventPage({ event }) {
               className={`bg-white rounded-2xl shadow-xl p-4 md:p-6 grid ${getStatsGridClass()} gap-3 md:gap-6 border border-gold-100/50`}
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
+              transition={{ duration: 1.0 }}
             >
               {stats.map((stat, index) => {
                 // Dynamically get the icon component from the stat.icon value
@@ -743,7 +743,7 @@ export default function DefaultEventPage({ event }) {
         )}
 
         {/* DYNAMIC CONTENT SECTIONS */}
-        <div className="max-w-7xl mx-auto px-4 md:px-8 mt-12 space-y-12">
+        <div className="max-w-7x1 mx-auto px-4 md:px-8 mt-12 space-y-12">
           
           {/* GALLERY & CANDIDATES SECTION */}
           {(hasPosters || hasCandidates) && (

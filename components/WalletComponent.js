@@ -312,7 +312,7 @@ export default function WalletComponent() {
 
     // Create config
     const config = {
-      reference: `GLEEDZ_${userId}_${Date.now()}`,
+      reference: `GIGZZ_${userId}_${Date.now()}`,
       email: userEmail,
       amount: amountInKobo,
       publicKey: publicKey,

@@ -729,98 +729,104 @@ export default function HomeClient({ logoUrl, posters }) {
         )}
       </AnimatePresence>
 
-      {/* Hero Section */}
-      <section className="relative h-[60vh] md:h-[70vh] w-full flex items-center justify-center overflow-hidden rounded-b-[2rem] shadow-xl bg-black">
-        {/* Background slideshow */}
-        <AnimatePresence mode="wait">
-          {heroSlides.map((slide, idx) =>
-            idx === currentHero ? (
-              slide.isVideo ? (
-                <motion.video
-                  key={idx}
-                  src={slide.src}
-                  autoPlay
-                  muted
-                  playsInline
-                  loop
-                  className="absolute inset-0 w-full h-full object-cover"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 1 }}
-                />
-              ) : (
-                <motion.div
-                  key={idx}
-                  className="absolute inset-0 w-full h-full"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 1 }}
-                >
-                  <Image
+      {/* Hero Section - UPDATED FOR MOBILE */}
+      <section className="relative w-full flex items-center justify-center overflow-hidden rounded-b-[2rem] shadow-xl bg-black">
+        {/* Mobile: 10:5 ratio (2:1), Desktop: 70vh */}
+        <div className="w-full aspect-[2/1] md:aspect-auto md:h-[70vh]">
+          {/* Background slideshow */}
+          <AnimatePresence mode="wait">
+            {heroSlides.map((slide, idx) =>
+              idx === currentHero ? (
+                slide.isVideo ? (
+                  <motion.video
+                    key={idx}
                     src={slide.src}
-                    alt={`Hero ${idx}`}
-                    fill
-                    className="object-cover"
-                    unoptimized
+                    autoPlay
+                    muted
+                    playsInline
+                    loop
+                    className="absolute inset-0 w-full h-full object-cover"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 1 }}
                   />
-                </motion.div>
-              )
-            ) : null
-          )}
-        </AnimatePresence>
+                ) : (
+                  <motion.div
+                    key={idx}
+                    className="absolute inset-0 w-full h-full"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 1 }}
+                  >
+                    <Image
+                      src={slide.src}
+                      alt={`Hero ${idx}`}
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </motion.div>
+                )
+              ) : null
+            )}
+          </AnimatePresence>
+        </div>
 
-        {/* Top Bar */}
-        <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-20">
+        {/* Top Bar - IMPROVED MOBILE ALIGNMENT */}
+        <div className="absolute top-3 md:top-4 left-3 md:left-4 right-3 md:right-4 flex items-center justify-between z-20">
+          {/* Logo */}
           {logoUrl ? (
             <Image
               src={logoUrl}
               alt="Logo"
-              width={80}
-              height={40}
+              width={60}
+              height={30}
               className="rounded-lg object-contain"
               unoptimized
             />
           ) : (
-            <div className="w-10 h-10 rounded-lg bg-gold-600 flex items-center justify-center text-white font-bold">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-gold-600 flex items-center justify-center text-white font-bold text-sm md:text-base">
               G
             </div>
           )}
 
-          {/* Right side: TV + BookOpen + UserCircle/Profile with Logout Dropdown */}
-          <div className="flex gap-4 items-center">
-            {/* TV Icon */}
+          {/* Right side: TV + BookOpen + UserCircle/Profile with Logout Dropdown - IMPROVED ALIGNMENT */}
+          <div className="flex gap-2 md:gap-4 items-center">
+            {/* TV Icon - Smaller on mobile */}
             <Link href="/gleedztv" className="text-white hover:scale-110 transition">
-              <Tv className="w-6 h-6 cursor-pointer" />
+              <Tv className="w-5 h-5 md:w-6 md:h-6 cursor-pointer" />
             </Link>
 
-            {/* ADDED: BookOpen Icon */}
+            {/* BookOpen Icon - Smaller on mobile */}
             <button 
               onClick={() => router.push("/gleedz")}
               className="text-white hover:scale-110 transition"
             >
-              <BookOpen className="w-6 h-6 cursor-pointer" />
+              <BookOpen className="w-5 h-5 md:w-6 md:h-6 cursor-pointer" />
             </button>
 
+            {/* User Profile - Better alignment */}
             <div className="relative" ref={dropdownRef}>
               <div
-                className="cursor-pointer hover:scale-110 transition"
+                className="cursor-pointer hover:scale-110 transition flex items-center justify-center"
                 onClick={handleUserClick}
                 onMouseEnter={() => session && setShowLogoutDropdown(true)}
               >
                 {!session ? (
-                  <UserCircle className="w-6 h-6 text-white" />
+                  <UserCircle className="w-5 h-5 md:w-6 md:h-6 text-white" />
                 ) : userData?.avatar_url ? (
                   <Image
                     src={userData.avatar_url}
                     alt="Profile"
-                    width={24}
-                    height={24}
-                    className="w-6 h-6 rounded-full object-cover border-2 border-white"
+                    width={20}
+                    height={20}
+                    className="w-5 h-5 md:w-6 md:h-6 rounded-full object-cover border border-white"
+                    unoptimized
                   />
                 ) : (
-                  <UserCircle className="w-6 h-6 text-white" />
+                  <UserCircle className="w-5 h-5 md:w-6 md:h-6 text-white" />
                 )}
               </div>
 
@@ -832,7 +838,7 @@ export default function HomeClient({ logoUrl, posters }) {
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute right-0 top-10 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-50"
+                    className="absolute right-0 top-8 md:top-10 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-50"
                     onMouseLeave={() => setShowLogoutDropdown(false)}
                   >
                     <div className="p-4">
@@ -875,7 +881,7 @@ export default function HomeClient({ logoUrl, posters }) {
           </div>
         </div>
 
-        {/* Call to Action */}
+        {/* Call to Action - SMALLER BUTTONS ON MOBILE */}
         <AnimatePresence mode="wait">
           {heroSlides.map((slide, idx) =>
             idx === currentHero ? (
@@ -885,14 +891,14 @@ export default function HomeClient({ logoUrl, posters }) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -40 }}
                 transition={{ duration: 0.8 }}
-                className="absolute bottom-10 left-1/2 transform -translate-x-1/2 text-center text-white px-4 z-20"
+                className="absolute bottom-6 md:bottom-10 left-1/2 transform -translate-x-1/2 text-center text-white px-4 z-20 w-full max-w-xs md:max-w-none"
               >
-                <h2 className="text-2xl md:text-4xl font-bold drop-shadow-lg mb-3">
+                <h2 className="text-lg md:text-2xl lg:text-4xl font-bold drop-shadow-lg mb-2 md:mb-3 px-2">
                   {slide.heading}
                 </h2>
                 <Link
                   href={slide.button.href}
-                  className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 rounded-full shadow-lg font-semibold transition"
+                  className="inline-block px-4 py-2 md:px-6 md:py-3 bg-yellow-600 hover:bg-yellow-700 rounded-full shadow-lg font-semibold transition text-sm md:text-base"
                 >
                   {slide.button.label}
                 </Link>
@@ -903,10 +909,10 @@ export default function HomeClient({ logoUrl, posters }) {
       </section>
 
       {/* Text below hero with Social Media Icons */}
-      <div className="relative mt-6 px-8 md:px-16 lg:px-24">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="relative mt-4 md:mt-6 px-4 md:px-16 lg:px-24">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 md:gap-4">
           {/* Social Media Icons - Left side */}
-          <div className="flex gap-4">
+          <div className="flex gap-3 md:gap-4">
             {socialMedia.map((social, index) => (
               <motion.a
                 key={index}
@@ -918,13 +924,13 @@ export default function HomeClient({ logoUrl, posters }) {
                 className="text-yellow-600 hover:text-yellow-700 transition-colors"
                 aria-label={social.label}
               >
-                <social.icon size={24} />
+                <social.icon size={20} className="md:w-6 md:h-6" />
               </motion.a>
             ))}
           </div>
 
           {/* Heading - Center */}
-          <h2 className="text-2xl md:text-3xl font-bold text-yellow-700 text-center">
+          <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-yellow-700 text-center mt-2 md:mt-0">
             Your Hub for Premium Events
           </h2>
 
@@ -934,8 +940,8 @@ export default function HomeClient({ logoUrl, posters }) {
       </div>
 
       {/* Content area */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-8 max-w-7xl mx-auto mt-12 px-4 md:px-8">
-        {/* Sidebar - Updated with sticky behavior */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 max-w-7xl mx-auto mt-8 md:mt-12 px-4 md:px-8">
+        {/* Mobile Sidebar - HIDDEN ON MOBILE, SHOWN ON DESKTOP */}
         <aside className="hidden md:block md:col-span-3">
           <div className="sticky top-24 space-y-4">
             {/* Events Mall */}
@@ -1012,13 +1018,13 @@ export default function HomeClient({ logoUrl, posters }) {
         <main className="col-span-12 md:col-span-9">
           {/* Event Tabs */}
           <div className="md:flex md:gap-4 md:overflow-x-auto md:pb-3">
-            <div className="grid grid-cols-2 gap-3 md:flex md:gap-4">
+            <div className="grid grid-cols-2 gap-2 md:flex md:gap-4">
               {eventTabs.map((tab, idx) => (
                 <motion.div
                   key={idx}
                   whileHover={{ scale: 1.05 }}
                   onClick={() => handleEventTabClick(tab)}
-                  className="glass rounded-xl md:rounded-2xl p-3 md:p-4 cursor-pointer text-center hover:shadow-lg transition-all duration-200"
+                  className="glass rounded-xl md:rounded-2xl p-2 md:p-4 cursor-pointer text-center hover:shadow-lg transition-all duration-200"
                 >
                   <tab.icon className="mx-auto text-yellow-600 w-4 h-4 md:w-6 md:h-6" />
                   <h3 className="mt-1 text-xs md:text-sm font-bold text-yellow-800 truncate">
@@ -1030,23 +1036,23 @@ export default function HomeClient({ logoUrl, posters }) {
           </div>
 
           {/* Top Events Section */}
-          <section className="mt-10">
-            <h2 className="text-2xl md:text-3xl font-bold mb-6 text-yellow-800">
+          <section className="mt-8 md:mt-10">
+            <h2 className="text-xl md:text-2xl lg:text-3xl font-bold mb-4 md:mb-6 text-yellow-800">
               Top Events
             </h2>
             
             {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 {[1, 2, 3, 4, 5, 6].map((skeleton) => (
-                  <div key={skeleton} className="glass rounded-2xl p-5 animate-pulse">
-                    <div className="h-40 md:h-48 bg-gray-300 rounded-xl mb-3"></div>
+                  <div key={skeleton} className="glass rounded-2xl p-4 md:p-5 animate-pulse">
+                    <div className="h-32 md:h-40 lg:h-48 bg-gray-300 rounded-xl mb-3"></div>
                     <div className="h-4 bg-gray-300 rounded mb-2"></div>
                     <div className="h-3 bg-gray-300 rounded w-2/3"></div>
                   </div>
                 ))}
               </div>
             ) : topEvents.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 {topEvents.map((event) => (
                   <motion.div
                     key={event.id}
@@ -1055,7 +1061,7 @@ export default function HomeClient({ logoUrl, posters }) {
                   >
                     {/* Event Banner */}
                     {event.thumbnail && (
-                      <div className="relative h-40 md:h-48 w-full">
+                      <div className="relative h-32 md:h-40 lg:h-48 w-full">
                         <Image
                           src={event.thumbnail}
                           alt={`${event.name} banner`}
@@ -1067,30 +1073,30 @@ export default function HomeClient({ logoUrl, posters }) {
                     )}
 
                     {/* Event Content */}
-                    <div className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
+                    <div className="p-4 md:p-6">
+                      <div className="flex items-start justify-between mb-3 md:mb-4">
+                        <div className="flex items-center gap-2 md:gap-3">
                           {event.logo && (
-                            <div className="w-10 h-10 relative">
+                            <div className="w-8 h-8 md:w-10 md:h-10 relative">
                               <Image
                                 src={event.logo}
                                 alt={`${event.name} logo`}
-                                width={40}
-                                height={40}
-                                className="object-contain rounded-[15px]"
+                                width={32}
+                                height={32}
+                                className="object-contain rounded-[12px] md:rounded-[15px]"
                                 unoptimized
                               />
                             </div>
                           )}
                           <div>
-                            <h3 className="text-xl font-bold text-gray-900 mb-1">
+                            <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-1 line-clamp-1">
                               {event.name}
                             </h3>
                           </div>
                         </div>
                       </div>
 
-                      <p className="text-gray-600 leading-relaxed mb-4 line-clamp-2">
+                      <p className="text-gray-600 leading-relaxed mb-3 md:mb-4 line-clamp-2 text-sm md:text-base">
                         {event.description || "Join us for an unforgettable experience filled with excitement and entertainment."}
                       </p>
 
@@ -1099,7 +1105,7 @@ export default function HomeClient({ logoUrl, posters }) {
                           <motion.button
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
-                            className="px-6 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
+                            className="px-4 py-1.5 md:px-6 md:py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg text-sm md:text-base"
                           >
                             View Event
                           </motion.button>
@@ -1107,7 +1113,7 @@ export default function HomeClient({ logoUrl, posters }) {
                         
                         {/* Event Type Tag */}
                         <span 
-                          className="inline-block px-3 py-1 rounded-full text-sm font-semibold border"
+                          className="inline-block px-2 py-1 rounded-full text-xs font-semibold border"
                           style={{ 
                             backgroundColor: `${event.page_color || '#f59e0b'}15`,
                             borderColor: event.page_color || '#f59e0b',
@@ -1122,25 +1128,25 @@ export default function HomeClient({ logoUrl, posters }) {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12 glass rounded-2xl">
-                <p className="text-gray-600 text-lg">No promoted events found.</p>
-                <p className="text-gray-500 mt-2">Check back later for featured events!</p>
+              <div className="text-center py-8 md:py-12 glass rounded-2xl">
+                <p className="text-gray-600 text-base md:text-lg">No promoted events found.</p>
+                <p className="text-gray-500 mt-2 text-sm md:text-base">Check back later for featured events!</p>
               </div>
             )}
           </section>
 
           {/* ADDED: Features Section */}
-          <section className="mt-16">
-            <div className="text-center mb-8 md:mb-12">
-              <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-yellow-800 mb-4">
+          <section className="mt-12 md:mt-16">
+            <div className="text-center mb-6 md:mb-12">
+              <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-yellow-800 mb-3 md:mb-4">
                 Powerful Event Features
               </h2>
-              <p className="text-base md:text-lg text-gray-600 max-w-2xl mx-auto">
+              <p className="text-sm md:text-base lg:text-lg text-gray-600 max-w-2xl mx-auto px-4">
                 Everything you need to create outstanding event experiences, all in one platform
               </p>
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
               {features.map((feature, index) => {
                 const Icon = feature.icon;
                 return (
@@ -1152,13 +1158,13 @@ export default function HomeClient({ logoUrl, posters }) {
                     whileHover={{ y: -5 }}
                     className="bg-white border border-gray-200 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-lg hover:shadow-xl transition-all duration-300 group"
                   >
-                    <div className="w-10 h-10 md:w-12 md:h-12 bg-yellow-500 rounded-lg md:rounded-xl flex items-center justify-center mb-3 md:mb-4 group-hover:scale-110 transition-transform duration-300">
-                      <Icon className="w-5 h-5 md:w-6 md:h-6 text-white" />
+                    <div className="w-8 h-8 md:w-10 md:h-10 lg:w-12 lg:h-12 bg-yellow-500 rounded-lg md:rounded-xl flex items-center justify-center mb-2 md:mb-3 lg:mb-4 group-hover:scale-110 transition-transform duration-300">
+                      <Icon className="w-4 h-4 md:w-5 md:h-5 lg:w-6 lg:h-6 text-white" />
                     </div>
-                    <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-2 md:mb-3">
+                    <h3 className="text-base md:text-lg lg:text-xl font-bold text-gray-900 mb-2 md:mb-3">
                       {feature.title}
                     </h3>
-                    <p className="text-sm md:text-base text-gray-600 leading-relaxed">
+                    <p className="text-xs md:text-sm lg:text-base text-gray-600 leading-relaxed">
                       {feature.description}
                     </p>
                   </motion.div>
@@ -1168,9 +1174,9 @@ export default function HomeClient({ logoUrl, posters }) {
           </section>
 
           {/* Testimonials */}
-          <section className="mt-16">
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-2xl md:text-3xl font-bold text-yellow-800">
+          <section className="mt-12 md:mt-16">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 md:mb-8 gap-3">
+              <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-yellow-800">
                 What People Say
               </h2>
               <motion.button
@@ -1183,37 +1189,37 @@ export default function HomeClient({ logoUrl, posters }) {
                     setShowTestimonialModal(true);
                   }
                 }}
-                className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
+                className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg text-sm md:text-base w-full sm:w-auto"
               >
-                <Plus size={20} />
+                <Plus size={16} className="md:w-5 md:h-5" />
                 Add Testimony
               </motion.button>
             </div>
             
             {testimonials.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 {testimonials.map((testimonial) => (
                   <motion.div
                     key={testimonial.id}
                     whileHover={{ scale: 1.02 }}
-                    className="glass rounded-xl md:rounded-2xl p-6 flex flex-col h-full"
+                    className="glass rounded-xl md:rounded-2xl p-4 md:p-6 flex flex-col h-full"
                   >
                     {renderStars(testimonial.rating)}
-                    <p className="text-gray-700 italic text-sm md:text-base mb-4 flex-grow">
+                    <p className="text-gray-700 italic text-xs md:text-sm lg:text-base mb-3 md:mb-4 flex-grow">
                       "{testimonial.message}"
                     </p>
-                    <div className="flex items-center gap-3 mt-auto">
+                    <div className="flex items-center gap-2 md:gap-3 mt-auto">
                       {testimonial.avatar_url ? (
                         <Image
                           src={testimonial.avatar_url}
                           alt={testimonial.name}
-                          width={40}
-                          height={40}
-                          className="rounded-full object-cover"
+                          width={32}
+                          height={32}
+                          className="rounded-full object-cover w-8 h-8 md:w-10 md:h-10"
                           unoptimized
                         />
                       ) : (
-                        <UserCircle size={40} className="text-gray-400" />
+                        <UserCircle size={32} className="text-gray-400 w-8 h-8 md:w-10 md:h-10" />
                       )}
                       <span className="font-semibold text-yellow-700 text-sm md:text-base">
                         {testimonial.name}
@@ -1223,9 +1229,9 @@ export default function HomeClient({ logoUrl, posters }) {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12 glass rounded-2xl">
-                <p className="text-gray-600 text-lg">No featured testimonials yet.</p>
-                <p className="text-gray-500 mt-2">Be the first to share your experience!</p>
+              <div className="text-center py-8 md:py-12 glass rounded-2xl">
+                <p className="text-gray-600 text-base md:text-lg">No featured testimonials yet.</p>
+                <p className="text-gray-500 mt-2 text-sm md:text-base">Be the first to share your experience!</p>
                 <button
                   onClick={() => {
                     if (!session) {
@@ -1234,7 +1240,7 @@ export default function HomeClient({ logoUrl, posters }) {
                       setShowTestimonialModal(true);
                     }
                   }}
-                  className="mt-4 px-6 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all duration-200"
+                  className="mt-3 md:mt-4 px-4 py-2 md:px-6 md:py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all duration-200 text-sm md:text-base"
                 >
                   Add First Testimonial
                 </button>
@@ -1243,6 +1249,41 @@ export default function HomeClient({ logoUrl, posters }) {
           </section>
         </main>
       </div>
+
+      {/* MOBILE BOTTOM NAVIGATION - ADDED FOR MOBILE USERS */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-4 z-40">
+        <div className="flex justify-around items-center">
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={handleEventMall}
+            className="flex flex-col items-center gap-1 p-2 text-yellow-700"
+          >
+            <Trophy size={20} />
+            <span className="text-xs font-medium">Events Mall</span>
+          </motion.button>
+
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={handleDashboardClick}
+            className="flex flex-col items-center gap-1 p-2 text-yellow-700"
+          >
+            <Layout size={20} />
+            <span className="text-xs font-medium">Dashboard</span>
+          </motion.button>
+
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => router.push("/events")}
+            className="flex flex-col items-center gap-1 p-2 text-yellow-700"
+          >
+            <Calendar size={20} />
+            <span className="text-xs font-medium">All Events</span>
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Add padding to bottom for mobile nav */}
+      <div className="pb-16 md:pb-0"></div>
     </div>
   );
 }
