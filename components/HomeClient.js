@@ -912,44 +912,44 @@ export default function HomeClient({ logoUrl, posters }) {
         </div>
 
         {/* Call to Action - SMALLER BUTTONS ON MOBILE - UPDATED */}
-        <AnimatePresence mode="wait">
-          {heroSlides.map((slide, idx) =>
-            idx === currentHero ? (
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 40 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -40 }}
-                transition={{ duration: 0.8 }}
-                className="absolute bottom-6 md:bottom-10 left-1/2 transform -translate-x-1/2 text-center text-white px-4 z-20 w-full max-w-xs md:max-w-none"
-              >
-                {/* Render caption if exists */}
-                {slide.caption && (
-                  <h2 className="text-lg md:text-2xl lg:text-4xl font-bold drop-shadow-lg mb-2 md:mb-3 px-2">
-                    {slide.caption}
-                  </h2>
-                )}
-                
-                {/* Render tagline if exists */}
-                {slide.tagline && (
-                  <p className="text-sm md:text-lg lg:text-xl drop-shadow-lg mb-3 md:mb-4 px-2">
-                    {slide.tagline}
-                  </p>
-                )}
-                
-                {/* Render CTA button only if label exists */}
-                {slide.cta && slide.cta.label && (
-                  <Link
-                    href={slide.cta.href || "#"}
-                    className="inline-block px-4 py-2 md:px-6 md:py-3 bg-yellow-600 hover:bg-yellow-700 rounded-full shadow-lg font-semibold transition text-sm md:text-base"
-                  >
-                    {slide.cta.label}
-                  </Link>
-                )}
-              </motion.div>
-            ) : null
-          )}
-        </AnimatePresence>
+<AnimatePresence mode="wait">
+  {heroSlides.map((slide, idx) =>
+    idx === currentHero ? (
+      <motion.div
+        key={idx}
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -40 }}
+        transition={{ duration: 0.8 }}
+        className="absolute bottom-6 md:bottom-10 left-1/2 transform -translate-x-1/2 text-center text-white px-4 z-20 w-full max-w-xs md:max-w-none"
+      >
+        {/* Render caption if exists */}
+        {slide.caption && (
+          <h2 className="text-xs md:text-xl lg:text-2xl font-bold drop-shadow-lg mb-1 md:mb-2 px-2">
+            {slide.caption}
+          </h2>
+        )}
+        
+        {/* Render tagline if exists */}
+        {slide.tagline && (
+          <p className="text-xs md:text-base lg:text-lg drop-shadow-lg mb-2 md:mb-3 px-2">
+            {slide.tagline}
+          </p>
+        )}
+        
+        {/* Render CTA button only if label exists */}
+        {slide.cta && slide.cta.label && (
+          <Link
+            href={slide.cta.href || "#"}
+            className="inline-block px-3 py-1 md:px-4 md:py-2 bg-yellow-600 hover:bg-yellow-700 rounded-full shadow-lg font-semibold transition text-xs md:text-sm"
+          >
+            {slide.cta.label}
+          </Link>
+        )}
+      </motion.div>
+    ) : null
+  )}
+</AnimatePresence>
       </section>
 
       {/* Text below hero with Social Media Icons */}
