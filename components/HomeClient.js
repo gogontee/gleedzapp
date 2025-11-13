@@ -153,7 +153,7 @@ export default function HomeClient({ logoUrl, posters }) {
     fetchTestimonials();
   }, []);
 
-  // Fetch hero slides from gleedz.hero column
+  // Fetch hero slides from gleedz_hero column - UPDATED
   useEffect(() => {
     const fetchHeroSlides = async () => {
       try {
@@ -164,54 +164,63 @@ export default function HomeClient({ logoUrl, posters }) {
 
         if (error) {
           console.error("Error fetching hero slides:", error);
+          // Fallback to default slides if error
           setHeroSlides([
             {
               src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero5.jpg",
-              isVideo: false,
-              heading: "Publish your event on Gleedz",
-              button: { label: "Create Event", href: "/create-event" },
+              type: "image",
+              caption: "Publish your event on Gleedz",
+              tagline: "Create amazing events with our platform",
+              cta: { label: "Create Event", href: "/create-event" },
             },
             {
               src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero7.jpg",
-              isVideo: false,
-              heading: "Explore Top Events",
-              button: { label: "Explore Events", href: "/events" },
+              type: "image",
+              caption: "Explore Top Events",
+              tagline: "Discover the best events around you",
+              cta: { label: "Explore Events", href: "/events" },
             },
             {
               src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero4.jpg",
-              isVideo: false,
-              heading: "Get your premium tickets now",
-              button: { label: "Buy Tickets", href: "/tickets" },
+              type: "image",
+              caption: "Get your premium tickets now",
+              tagline: "Secure your spot at exclusive events",
+              cta: { label: "Buy Tickets", href: "/tickets" },
             },
           ]);
           return;
         }
 
         if (data && data.hero) {
+          // Transform the data to match our expected format
           const transformedSlides = data.hero.map(slide => ({
             ...slide,
-            isVideo: slide.src ? slide.src.endsWith(".mp4") : false
+            isVideo: slide.type === "video"
           }));
           setHeroSlides(transformedSlides);
         } else {
+          // Fallback if no data
           setHeroSlides([
             {
               src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero5.jpg",
-              isVideo: false,
-              heading: "Publish your event on Gleedz",
-              button: { label: "Create Event", href: "/create-event" },
+              type: "image",
+              caption: "Publish your event on Gleedz",
+              tagline: "Create amazing events with our platform",
+              cta: { label: "Create Event", href: "/create-event" },
             },
             {
               src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero7.jpg",
-              isVideo: false,
-              heading: "Explore Top Events",
-              button: { label: "Explore Events", href: "/events" },
+              type: "image",
+              caption: "Explore Top Events",
+              tagline: "Discover the best events around you",
+              cta: { label: "Explore Events", href: "/events" },
             },
             {
               src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero4.jpg",
-              isVideo: false,
-              heading: "Get your premium tickets now",
-              button: { label: "Buy Tickets", href: "/tickets" },
+              type: "image",
+              caption: "Get your premium tickets now",
+              tagline: "Secure your spot at exclusive events",
+              cta: { label: "Buy Tickets", href: "/tickets" },
             },
           ]);
         }
@@ -220,21 +229,24 @@ export default function HomeClient({ logoUrl, posters }) {
         setHeroSlides([
           {
             src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero5.jpg",
-            isVideo: false,
-            heading: "Publish your event on Gleedz",
-            button: { label: "Create Event", href: "/create-event" },
+            type: "image",
+            caption: "Publish your event on Gleedz",
+            tagline: "Create amazing events with our platform",
+            cta: { label: "Create Event", href: "/create-event" },
           },
           {
             src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero7.jpg",
-            isVideo: false,
-            heading: "Explore Top Events",
-            button: { label: "Explore Events", href: "/events" },
+            type: "image",
+            caption: "Explore Top Events",
+            tagline: "Discover the best events around you",
+            cta: { label: "Explore Events", href: "/events" },
           },
           {
             src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero4.jpg",
-            isVideo: false,
-            heading: "Get your premium tickets now",
-            button: { label: "Buy Tickets", href: "/tickets" },
+            type: "image",
+            caption: "Get your premium tickets now",
+            tagline: "Secure your spot at exclusive events",
+            cta: { label: "Buy Tickets", href: "/tickets" },
           },
         ]);
       }
@@ -327,15 +339,28 @@ export default function HomeClient({ logoUrl, posters }) {
     fetchTopEvents();
   }, []);
 
-  // Auto change hero slides
+  // Auto change hero slides - UPDATED with proper timing logic
   useEffect(() => {
     if (heroSlides.length === 0) return;
     
-    const interval = setInterval(() => {
-      setCurrentHero((prev) => (prev + 1) % heroSlides.length);
-    }, 6000);
-    return () => clearInterval(interval);
-  }, [heroSlides.length]);
+    let interval;
+    const currentSlide = heroSlides[currentHero];
+    
+    if (currentSlide && currentSlide.type === "video") {
+      // For videos, we'll handle the transition in the video's onEnded event
+      // So we don't set an interval for videos
+      return;
+    } else {
+      // For images, use 6 second interval
+      interval = setInterval(() => {
+        setCurrentHero((prev) => (prev + 1) % heroSlides.length);
+      }, 6000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [currentHero, heroSlides]);
 
   // Updated poster rotation logic
   useEffect(() => {
@@ -384,6 +409,11 @@ export default function HomeClient({ logoUrl, posters }) {
       if (timer) clearTimeout(timer);
     };
   }, [currentPoster, posters]);
+
+  // Handle video end for hero slides - NEW FUNCTION
+  const handleVideoEnd = () => {
+    setCurrentHero((prev) => (prev + 1) % heroSlides.length);
+  };
 
   // Handle event tab click - ADDED MISSING FUNCTION
   const handleEventTabClick = (tab) => {
@@ -733,23 +763,23 @@ export default function HomeClient({ logoUrl, posters }) {
       <section className="relative w-full flex items-center justify-center overflow-hidden rounded-b-[2rem] shadow-xl bg-black">
         {/* Mobile: 10:5 ratio (2:1), Desktop: 70vh */}
         <div className="w-full aspect-[2/1] md:aspect-auto md:h-[70vh]">
-          {/* Background slideshow */}
+          {/* Background slideshow - UPDATED */}
           <AnimatePresence mode="wait">
             {heroSlides.map((slide, idx) =>
               idx === currentHero ? (
-                slide.isVideo ? (
+                slide.type === "video" ? (
                   <motion.video
                     key={idx}
                     src={slide.src}
                     autoPlay
                     muted
                     playsInline
-                    loop
                     className="absolute inset-0 w-full h-full object-cover"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 1 }}
+                    onEnded={handleVideoEnd}
                   />
                 ) : (
                   <motion.div
@@ -881,7 +911,7 @@ export default function HomeClient({ logoUrl, posters }) {
           </div>
         </div>
 
-        {/* Call to Action - SMALLER BUTTONS ON MOBILE */}
+        {/* Call to Action - SMALLER BUTTONS ON MOBILE - UPDATED */}
         <AnimatePresence mode="wait">
           {heroSlides.map((slide, idx) =>
             idx === currentHero ? (
@@ -893,15 +923,29 @@ export default function HomeClient({ logoUrl, posters }) {
                 transition={{ duration: 0.8 }}
                 className="absolute bottom-6 md:bottom-10 left-1/2 transform -translate-x-1/2 text-center text-white px-4 z-20 w-full max-w-xs md:max-w-none"
               >
-                <h2 className="text-lg md:text-2xl lg:text-4xl font-bold drop-shadow-lg mb-2 md:mb-3 px-2">
-                  {slide.heading}
-                </h2>
-                <Link
-                  href={slide.button.href}
-                  className="inline-block px-4 py-2 md:px-6 md:py-3 bg-yellow-600 hover:bg-yellow-700 rounded-full shadow-lg font-semibold transition text-sm md:text-base"
-                >
-                  {slide.button.label}
-                </Link>
+                {/* Render caption if exists */}
+                {slide.caption && (
+                  <h2 className="text-lg md:text-2xl lg:text-4xl font-bold drop-shadow-lg mb-2 md:mb-3 px-2">
+                    {slide.caption}
+                  </h2>
+                )}
+                
+                {/* Render tagline if exists */}
+                {slide.tagline && (
+                  <p className="text-sm md:text-lg lg:text-xl drop-shadow-lg mb-3 md:mb-4 px-2">
+                    {slide.tagline}
+                  </p>
+                )}
+                
+                {/* Render CTA button only if label exists */}
+                {slide.cta && slide.cta.label && (
+                  <Link
+                    href={slide.cta.href || "#"}
+                    className="inline-block px-4 py-2 md:px-6 md:py-3 bg-yellow-600 hover:bg-yellow-700 rounded-full shadow-lg font-semibold transition text-sm md:text-base"
+                  >
+                    {slide.cta.label}
+                  </Link>
+                )}
               </motion.div>
             ) : null
           )}
