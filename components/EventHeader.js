@@ -399,7 +399,7 @@ export default function EventHeader({ event }) {
       animate={{ opacity: 1, y: 0 }}
       className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-white/50 border-b border-gray-200/50"
       style={{ 
-        backgroundColor: `rgba(255, 255, 255, 0.92)`,
+        backgroundColor: `rgba(231, 227, 227, 0.92)`,
         borderBottomColor: `${pageColor}20`
       }}
     >

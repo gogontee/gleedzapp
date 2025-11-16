@@ -10,7 +10,7 @@ import {
   Clock, Eye, Crown, Sparkles, Menu, Newspaper, Mail, Phone, Map, 
   Facebook, Twitter, Instagram, Linkedin, Coins, Gem, Medal, Trophy, 
   Landmark, ChevronDown, DollarSign, Euro, IndianRupee, JapaneseYen, 
-  PoundSterling, Key, Target, Car, Key as KeyIcon, Gallery, Download,
+  PoundSterling, Key, Target, Car, Key as KeyIcon, Images, Download,
   Image as ImageIcon, Video, Music, Mic, Camera, Flag, Globe, Lock,
   Unlock, Settings, User, Users as UsersIcon, Phone as PhoneIcon,
   Mail as MailIcon, Map as MapIcon
@@ -29,7 +29,7 @@ export default function DefaultEventPage({ event }) {
   const posters = event?.group_banner1 || [];
 
   // ---------- sponsors ----------
-  const sponsors = event?.sponsors || [];
+  const sponsors = event?.group_banner2 || [];
 
   // ---------- candidates state ----------
   const [candidates, setCandidates] = useState([]);
@@ -52,7 +52,39 @@ export default function DefaultEventPage({ event }) {
   const heroTimerRef = useRef(null);
   const posterTimerRef = useRef(null);
   const sponsorsRef = useRef(null);
+  // Touch handlers for swipe functionality
+const [touchStart, setTouchStart] = useState(0);
+const [touchEnd, setTouchEnd] = useState(0);
 
+const handleTouchStart = (e) => {
+  setTouchStart(e.targetTouches[0].clientX);
+};
+
+const handleTouchMove = (e) => {
+  setTouchEnd(e.targetTouches[0].clientX);
+};
+
+const handleTouchEnd = () => {
+  if (!touchStart || !touchEnd) return;
+  
+  const distance = touchStart - touchEnd;
+  const minSwipeDistance = 50; // Minimum distance for a swipe
+  
+  if (distance > minSwipeDistance) {
+    // Swipe left - next poster
+    nextPoster();
+  } else if (distance < -minSwipeDistance) {
+    // Swipe right - previous poster
+    prevPoster();
+  }
+  
+  // Reset touch positions
+  setTouchStart(0);
+  setTouchEnd(0);
+};
+
+// Navigation functions are defined later in the file to avoid duplicate declarations.
+  
   // ---------- fetch candidates and activities ----------
   useEffect(() => {
     if (event?.id) {
@@ -118,7 +150,7 @@ export default function DefaultEventPage({ event }) {
       Twitter: Twitter,
       Instagram: Instagram,
       Linkedin: Linkedin,
-      Gallery: Gallery,
+      Images: Images,
       Download: Download,
       Image: ImageIcon,
       Video: Video,
@@ -701,358 +733,532 @@ export default function DefaultEventPage({ event }) {
           )}
         </section>
 
-        {/* ENHANCED STATS SECTION - Centered and pushed downward */}
-        {stats && stats.length > 0 && (
-          <section className="max-w-7xl mx-auto px-4 md:px-8 mt-8 relative z-30">
+        {/* ENHANCED STATS SECTION - Horizontal on mobile */}
+{stats && stats.length > 0 && (
+  <section className="max-w-7xl mx-auto px-4 md:px-8 mt-8 relative z-30">
+    <motion.div 
+      className="bg-gray-300 rounded-2xl shadow-xl p-3 md:p-6 border border-gold-100/50"
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 1.0 }}
+    >
+      {/* Mobile: Horizontal scroll - HIDDEN SCROLLBAR */}
+      <div className="md:hidden flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
+        {stats.map((stat, index) => {
+          const IconComponent = getIconComponent(stat.icon);
+          return (
             <motion.div 
-              className={`bg-white rounded-2xl shadow-xl p-4 md:p-6 grid ${getStatsGridClass()} gap-3 md:gap-6 border border-gold-100/50`}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1.0 }}
+              key={`${stat.title}-${index}`}
+              className="flex items-center gap-2 p-2 rounded-lg bg-gradient-to-br from-slate-50 to-white border border-slate-100 hover:shadow-lg transition-all duration-300 flex-shrink-0 min-w-[120px]"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.1 + 0.3 }}
             >
-              {stats.map((stat, index) => {
-                // Dynamically get the icon component from the stat.icon value
-                const IconComponent = getIconComponent(stat.icon);
-                return (
-                  <motion.div 
-                    key={`${stat.title}-${index}`}
-                    className="flex items-center gap-3 p-2 md:p-4 rounded-xl bg-gradient-to-br from-slate-50 to-white border border-slate-100 hover:shadow-lg transition-all duration-300"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 + 0.3 }}
-                  >
-                    <div 
-                      className="p-1.5 md:p-3 rounded-xl shadow-lg"
-                      style={{ backgroundColor: pageColor }}
-                    >
-                      <IconComponent className="w-4 h-4 md:w-6 md:h-6 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm md:text-xl font-bold text-gray-900">
-                        {stat.number}
-                      </div>
-                      <div className="text-xs md:text-sm text-gray-500 font-medium truncate">
-                        {stat.title}
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
+              <div 
+                className="p-1.5 rounded-lg shadow-md flex-shrink-0"
+                style={{ backgroundColor: pageColor }}
+              >
+                <IconComponent className="w-3 h-3 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-gray-900 leading-tight whitespace-nowrap">
+                  {stat.number}
+                </div>
+                <div className="text-[10px] text-gray-500 font-medium truncate">
+                  {stat.title}
+                </div>
+              </div>
             </motion.div>
-          </section>
-        )}
+          );
+        })}
+      </div>
+
+      {/* Desktop: Grid layout */}
+      <div className={`hidden md:grid ${getStatsGridClass()} gap-6`}>
+        {stats.map((stat, index) => {
+          const IconComponent = getIconComponent(stat.icon);
+          return (
+            <motion.div 
+              key={`${stat.title}-${index}`}
+              className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-br from-slate-50 to-white border border-slate-100 hover:shadow-lg transition-all duration-300"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 + 0.3 }}
+            >
+              <div 
+                className="p-3 rounded-xl shadow-lg flex-shrink-0"
+                style={{ backgroundColor: pageColor }}
+              >
+                <IconComponent className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xl font-bold text-gray-900">
+                  {stat.number}
+                </div>
+                <div className="text-sm text-gray-500 font-medium truncate">
+                  {stat.title}
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Add custom scrollbar hide styles */}
+      <style jsx>{`
+        .scrollbar-hide {
+          -ms-overflow-style: none;  /* Internet Explorer 10+ */
+          scrollbar-width: none;  /* Firefox */
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;  /* Safari and Chrome */
+        }
+      `}</style>
+    </motion.div>
+  </section>
+)}
 
         {/* DYNAMIC CONTENT SECTIONS */}
-        <div className="max-w-7x1 mx-auto px-4 md:px-8 mt-12 space-y-12">
-          
-          {/* GALLERY & CANDIDATES SECTION */}
-          {(hasPosters || hasCandidates) && (
-            <section id="gallery" className="mt-12">
-              <motion.div 
-                className="text-center mb-8"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-              >
-                <h2 className="text-3xl font-bold text-gray-900 mb-3">Event Gallery</h2>
-                <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                  {getShortDescription(event?.description)}
-                </p>
-              </motion.div>
+<div className="max-w-7xl mx-auto px-4 md:px-8 mt-12 space-y-12">
+  
+  {/* ABOUT SECTION - Always show */}
+  <section id="about" className="mt-12">
+    <motion.div 
+      className="text-center mb-8"
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+    >
+      <h2 className="text-3xl font-bold text-gray-900 mb-3">About</h2>
+      <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+        {getShortDescription(event?.description)}
+      </p>
+    </motion.div>
+  </section>
 
-              <div className={`grid ${getGalleryGridClass()} gap-6`}>
-                {/* Main Poster Carousel - Centered when no candidates */}
-                {hasPosters && (
-                  <motion.div 
-                    className={hasCandidates ? "lg:col-span-2" : "col-span-1 flex justify-center"}
-                    initial={{ opacity: 0, x: -20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
+  {/* MOBILE: CANDIDATES SECTION - Show after about and before event visuals on mobile */}
+  {hasCandidates && (
+    <div className="md:hidden">
+      <motion.div 
+        id="candidates"
+        className="bg-gray-300 rounded-2xl shadow-lg p-6 border border-gold-100/50"
+        initial={{ opacity: 0, x: 20 }}
+        whileInView={{ opacity: 1, x: 0 }}
+        viewport={{ once: true }}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-bold text-gray-900">Top Candidates</h3>
+          <span 
+            className="text-sm text-gold-600 font-semibold px-3 py-1 rounded-full flex items-center gap-1"
+            style={{ backgroundColor: `${pageColor}15`, color: pageColor }}
+          >
+            <Crown className="w-3 h-3" />
+            {candidates.length} Stars
+          </span>
+        </div>
+
+        {/* 2-COLUMN GRID FOR CANDIDATES ON ALL SCREENS */}
+        <div className="grid grid-cols-2 gap-4">
+          {candidates.map((candidate, index) => (
+            <motion.div 
+              key={candidate.id}
+              className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-white to-slate-50 border border-slate-200 hover:shadow-2xl transition-all duration-500 hover:scale-[1.02] cursor-pointer"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.1 }}
+              onClick={() => window.location.href = `/myevent/${event?.id}/candidate/${candidate.id}`}
+            >
+              <div className="relative p-3">
+                {/* Candidate Image and Rank */}
+                <div className="relative mb-3">
+                  <div className="w-full aspect-square rounded-xl overflow-hidden border-2 border-white shadow-lg group-hover:shadow-xl transition-all duration-300">
+                    {candidate.photo ? (
+                      <Image 
+                        src={candidate.photo} 
+                        alt={candidate.full_name} 
+                        width={200}
+                        height={200}
+                        className="object-cover w-full h-full group-hover:scale-110 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                        <Users className="w-8 h-8 text-gray-500" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Rank Badge */}
+                  <div 
+                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center shadow-lg border-2 border-white text-xs font-bold text-white"
+                    style={{ backgroundColor: pageColor }}
                   >
-                    <div className={`bg-white rounded-2xl shadow-lg p-6 border border-gold-100/50 ${!hasCandidates ? 'max-w-4xl w-full' : 'w-full'}`}>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xl font-bold text-gray-900">Event Visuals</h3>
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={prevPoster} 
-                            className="p-2 rounded-full bg-gold-50 hover:bg-gold-100 transition-colors"
-                            style={{ backgroundColor: `${pageColor}15` }}
-                          >
-                            <ChevronLeft className="w-4 h-4 text-gold-600" />
-                          </button>
-                          <button 
-                            onClick={nextPoster} 
-                            className="p-2 rounded-full bg-gold-50 hover:bg-gold-100 transition-colors"
-                            style={{ backgroundColor: `${pageColor}15` }}
-                          >
-                            <ChevronRight className="w-4 h-4 text-gold-600" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
-                        <AnimatePresence mode="wait">
-                          {posters.map((poster, i) => {
-                            if (i !== posterIndex) return null;
-                            
-                            const actualUrl = getSafeUrl(poster);
-                            const isVideo = isVideoFile(actualUrl);
-                            
-                            return isVideo ? (
-                              <motion.video
-                                key={i}
-                                src={actualUrl}
-                                className="w-full h-full object-cover"
-                                autoPlay
-                                muted
-                                playsInline
-                                onEnded={handlePosterVideoEnd}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: 0.5 }}
-                              />
-                            ) : (
-                              <motion.div
-                                key={i}
-                                className="w-full h-full"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: 0.5 }}
-                              >
-                                <Image 
-                                  src={actualUrl} 
-                                  alt={`Event Visual ${i + 1}`} 
-                                  fill 
-                                  className="object-cover" 
-                                  unoptimized 
-                                />
-                              </motion.div>
-                            );
-                          })}
-                        </AnimatePresence>
-                        
-                        {/* Poster indicator */}
-                        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-                          <div className="flex gap-1">
-                            {posters.map((_, i) => (
-                              <button
-                                key={i}
-                                onClick={() => setPosterIndex(i)}
-                                className={`w-2 h-2 rounded-full transition-all ${
-                                  i === posterIndex ? 'bg-white' : 'bg-white/50'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* SPONSORS CONTAINER - Added below the poster carousel */}
-                      {hasSponsors && (
-                        <motion.div 
-                          className="mt-6"
-                          initial={{ opacity: 0, y: 20 }}
-                          whileInView={{ opacity: 1, y: 0 }}
-                          viewport={{ once: true }}
-                          transition={{ delay: 0.4 }}
-                        >
-                          <h4 className="text-lg font-bold text-gray-900 mb-3 text-center">Our Sponsors</h4>
-                          <div 
-                            ref={sponsorsRef}
-                            className="relative overflow-hidden bg-white rounded-xl border border-gold-100/50"
-                            style={{ height: '120px' }}
-                          >
-                            <div className="flex items-center h-full animate-scroll gap-6 py-4">
-                              {/* Duplicate sponsors for seamless loop */}
-                              {[...sponsors, ...sponsors].map((sponsor, index) => {
-                                const actualUrl = getSafeUrl(sponsor);
-                                const isVideo = isVideoFile(actualUrl);
-                                
-                                return (
-                                  <div 
-                                    key={index} 
-                                    className="flex-shrink-0 flex items-center justify-center px-2"
-                                    style={{ minWidth: '150px' }}
-                                  >
-                                    {isVideo ? (
-                                      <video
-                                        src={actualUrl}
-                                        className="max-h-16 object-contain rounded-lg"
-                                        autoPlay
-                                        muted
-                                        loop
-                                        playsInline
-                                      />
-                                    ) : (
-                                      <div className="relative h-16 w-24">
-                                        <Image 
-                                          src={actualUrl} 
-                                          alt={`Sponsor ${index + 1}`}
-                                          fill
-                                          className="object-contain rounded-lg"
-                                          unoptimized
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            
-                            {/* Gradient overlays for smooth edges */}
-                            <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-white to-transparent z-10" />
-                            <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white to-transparent z-10" />
-                          </div>
-                          
-                          {/* Add custom animation styles */}
-                          <style jsx>{`
-                            @keyframes scroll {
-                              0% {
-                                transform: translateX(0);
-                              }
-                              100% {
-                                transform: translateX(calc(-150px * ${sponsors.length}));
-                              }
-                            }
-                            .animate-scroll {
-                              animation: scroll 30s linear infinite;
-                            }
-                            .animate-scroll:hover {
-                              animation-play-state: paused;
-                            }
-                          `}</style>
-                        </motion.div>
-                      )}
+                    {index + 1}
+                  </div>
+                </div>
+                
+                {/* Candidate Info */}
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-gray-900 text-sm leading-tight truncate">
+                        {getFirstName(candidate.full_name)}
+                      </h4>
+      
                     </div>
-                  </motion.div>
-                )}
-
-                {/* CANDIDATES SECTION - Only render if candidates exist */}
-                {hasCandidates && (
-                  <motion.div 
-                    id="candidates"
-                    className="bg-white rounded-2xl shadow-lg p-6 border border-gold-100/50"
-                    initial={{ opacity: 0, x: 20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
-                  >
-                    <div className="flex items-center justify-between mb-6">
-                      <h3 className="text-xl font-bold text-gray-900">Top Candidates</h3>
-                      <span 
-                        className="text-sm text-gold-600 font-semibold px-3 py-1 rounded-full flex items-center gap-1"
-                        style={{ backgroundColor: `${pageColor}15`, color: pageColor }}
-                      >
-                        <Crown className="w-3 h-3" />
-                        {candidates.length} Stars
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(candidate.id);
+                      }}
+                      className="p-1 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 ml-1"
+                    >
+                      <Heart 
+                        className="w-3 h-3" 
+                        fill={favoriteCandidates.has(candidate.id) ? "currentColor" : "none"}
+                      />
+                    </button>
+                  </div>
+                  
+                  {/* Points Display */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <Star className="w-3 h-3" style={{ color: pageColor }} />
+                      <span className="font-bold text-xs" style={{ color: pageColor }}>
+                        {candidate.points?.toLocaleString() || '0'} pts
                       </span>
                     </div>
-
-                    {/* 2-COLUMN GRID FOR CANDIDATES ON ALL SCREENS */}
-                    <div className="grid grid-cols-2 gap-4">
-                      {candidates.map((candidate, index) => (
-                        <motion.div 
-                          key={candidate.id}
-                          className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-white to-slate-50 border border-slate-200 hover:shadow-2xl transition-all duration-500 hover:scale-[1.02] cursor-pointer"
-                          initial={{ opacity: 0, y: 20 }}
-                          whileInView={{ opacity: 1, y: 0 }}
-                          viewport={{ once: true }}
-                          transition={{ delay: index * 0.1 }}
-                          onClick={() => window.location.href = `/myevent/${event?.id}/candidate/${candidate.id}`}
-                        >
-                          <div className="relative p-3">
-                            {/* Candidate Image and Rank */}
-                            <div className="relative mb-3">
-                              <div className="w-full aspect-square rounded-xl overflow-hidden border-2 border-white shadow-lg group-hover:shadow-xl transition-all duration-300">
-                                {candidate.photo ? (
-                                  <Image 
-                                    src={candidate.photo} 
-                                    alt={candidate.full_name} 
-                                    width={200}
-                                    height={200}
-                                    className="object-cover w-full h-full group-hover:scale-110 transition-transform duration-500"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
-                                    <Users className="w-8 h-8 text-gray-500" />
-                                  </div>
-                                )}
-                              </div>
-                              
-                              {/* Rank Badge */}
-                              <div 
-                                className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center shadow-lg border-2 border-white text-xs font-bold text-white"
-                                style={{ backgroundColor: pageColor }}
-                              >
-                                {index + 1}
-                              </div>
-                            </div>
-                            
-                            {/* Candidate Info */}
-                            <div className="space-y-2">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="font-bold text-gray-900 text-sm leading-tight truncate">
-                                    {getFirstName(candidate.full_name)}
-                                  </h4>
-                                  <p className="text-xs text-gray-600 truncate">
-                                    {candidate.full_name}
-                                  </p>
-                                </div>
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleFavorite(candidate.id);
-                                  }}
-                                  className="p-1 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 ml-1"
-                                >
-                                  <Heart 
-                                    className="w-3 h-3" 
-                                    fill={favoriteCandidates.has(candidate.id) ? "currentColor" : "none"}
-                                  />
-                                </button>
-                              </div>
-                              
-                              {/* Points Display */}
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1">
-                                  <Star className="w-3 h-3" style={{ color: pageColor }} />
-                                  <span className="font-bold text-xs" style={{ color: pageColor }}>
-                                    {candidate.points?.toLocaleString() || '0'} pts
-                                  </span>
-                                </div>
-                                
-                                {candidate.contest_number && (
-                                  <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full border"
-                                    style={{ borderColor: pageColor, color: pageColor, backgroundColor: `${pageColor}08` }}
-                                  >
-                                    #{candidate.contest_number}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-
-                    <Link 
-                      href={`/myevent/${event?.id}/vote`}
-                      className="block mt-6 px-4 py-2 text-center text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 text-sm"
-                      style={{ 
-                        backgroundColor: pageColor,
-                        boxShadow: `0 10px 15px -3px ${pageColor}25, 0 4px 6px -4px ${pageColor}25`
-                      }}
-                    >
-                      View All Candidates
-                    </Link>
-                  </motion.div>
-                )}
+                    
+                    {candidate.contest_number && (
+                      <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full border"
+                        style={{ borderColor: pageColor, color: pageColor, backgroundColor: `${pageColor}08` }}
+                      >
+                        #{candidate.contest_number}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-            </section>
-          )}
+            </motion.div>
+          ))}
+        </div>
 
+        <Link 
+          href={`/myevent/${event?.id}/vote`}
+          className="block mt-6 px-4 py-2 text-center text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 text-sm"
+          style={{ 
+            backgroundColor: pageColor,
+            boxShadow: `0 10px 15px -3px ${pageColor}25, 0 4px 6px -4px ${pageColor}25`
+          }}
+        >
+          View All Candidates
+        </Link>
+      </motion.div>
+    </div>
+  )}
+
+  {/* GALLERY & VISUALS SECTION */}
+{(hasPosters || hasCandidates) && (
+  <section id="gallery" className="mt-12">
+    <div className={`grid ${getGalleryGridClass()} gap-6`}>
+      {/* Main Poster Carousel - Centered when no candidates */}
+      {hasPosters && (
+        <motion.div 
+          className={hasCandidates ? "lg:col-span-2" : "col-span-1 flex justify-center"}
+          initial={{ opacity: 0, x: -20 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true }}
+        >
+          <div className={`bg-gray-800 rounded-2xl shadow-lg p-6 border border-gold-100/50 ${!hasCandidates ? 'max-w-4xl w-full' : 'w-full'}`}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-white">Event Visuals</h3>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={prevPoster} 
+                  className="p-2 rounded-full bg-gold-50 hover:bg-gold-100 transition-colors"
+                  style={{ backgroundColor: `${pageColor}15` }}
+                >
+                  <ChevronLeft className="w-4 h-4 text-gold-600" />
+                </button>
+                <button 
+                  onClick={nextPoster} 
+                  className="p-2 rounded-full bg-gold-50 hover:bg-gold-100 transition-colors"
+                  style={{ backgroundColor: `${pageColor}15` }}
+                >
+                  <ChevronRight className="w-4 h-4 text-gold-600" />
+                </button>
+              </div>
+            </div>
+
+            {/* Swipeable Container */}
+            <div 
+              className="relative rounded-xl overflow-hidden bg-black aspect-video touch-pan-y"
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              <AnimatePresence mode="wait">
+                {posters.map((poster, i) => {
+                  if (i !== posterIndex) return null;
+                  
+                  const actualUrl = getSafeUrl(poster);
+                  const isVideo = isVideoFile(actualUrl);
+                  
+                  return isVideo ? (
+                    <motion.video
+                      key={i}
+                      src={actualUrl}
+                      className="w-full h-full object-cover"
+                      autoPlay
+                      muted
+                      playsInline
+                      onEnded={handlePosterVideoEnd}
+                      initial={{ opacity: 0, x: 100 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -100 }}
+                      transition={{ duration: 0.3 }}
+                    />
+                  ) : (
+                    <motion.div
+                      key={i}
+                      className="w-full h-full"
+                      initial={{ opacity: 0, x: 100 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -100 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <Image 
+                        src={actualUrl} 
+                        alt={`Event Visual ${i + 1}`} 
+                        fill 
+                        className="object-cover" 
+                        unoptimized 
+                      />
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+              
+              {/* Poster indicator */}
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+                <div className="flex gap-1">
+                  {posters.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setPosterIndex(i)}
+                      className={`w-2 h-2 rounded-full transition-all ${
+                        i === posterIndex ? 'bg-white' : 'bg-white/50'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+              {/* SPONSORS CONTAINER - Added below the poster carousel */}
+{hasSponsors && (
+  <motion.div 
+    className="mt-6"
+    initial={{ opacity: 0, y: 20 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true }}
+    transition={{ delay: 0.4 }}
+  >
+  
+    {/* Reduced height */}
+    <div 
+      ref={sponsorsRef}
+      className="relative overflow-hidden bg-white rounded-xl border border-gold-100/50"
+      style={{ height: '80px' }}
+    >
+      <div className="flex items-center h-full animate-scroll gap-1 py-1"> {/* Reduced gap and padding */}
+        {/* Duplicate sponsors for seamless loop */}
+        {[...sponsors, ...sponsors].map((sponsor, index) => {
+          const actualUrl = getSafeUrl(sponsor);
+          const isVideo = isVideoFile(actualUrl);
+          
+          return (
+            <div 
+              key={index} 
+              className="flex-shrink-0 flex items-center justify-center px-1"
+              style={{ minWidth: '140px' }}
+            >
+              {isVideo ? (
+                <video
+                  src={actualUrl}
+                  className="max-h-12 object-contain rounded-lg"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                />
+              ) : (
+                <div className="relative h-12 w-20"> {/* Reduced dimensions */}
+                  <Image 
+                    src={actualUrl} 
+                    alt={`Sponsor ${index + 1}`}
+                    fill
+                    className="object-contain rounded-lg"
+                    unoptimized
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* Gradient overlays for smooth edges */}
+      <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent z-10" /> {/* Reduced width */}
+      <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent z-10" /> {/* Reduced width */}
+    </div>
+    
+    {/* Add custom animation styles */}
+    <style jsx>{`
+      @keyframes scroll {
+        0% {
+          transform: translateX(0);
+        }
+        100% {
+          transform: translateX(calc(-140px * ${sponsors.length})); /* Adjusted for new min-width */
+        }
+      }
+      .animate-scroll {
+        animation: scroll 30s linear infinite;
+      }
+      .animate-scroll:hover {
+        animation-play-state: paused;
+      }
+    `}</style>
+  </motion.div>
+)}
+            </div>
+          </motion.div>
+        )}
+
+        {/* DESKTOP: CANDIDATES SECTION - Only show on desktop alongside event visuals */}
+        {hasCandidates && (
+          <div className="hidden md:block">
+            <motion.div 
+              id="candidates"
+              className="bg-gray-300 rounded-2xl shadow-lg p-6 border border-gold-100/50"
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-gray-900">Top Candidates</h3>
+                <span 
+                  className="text-sm text-gold-600 font-semibold px-3 py-1 rounded-full flex items-center gap-1"
+                  style={{ backgroundColor: `${pageColor}15`, color: pageColor }}
+                >
+                  <Crown className="w-3 h-3" />
+                  {candidates.length} Stars
+                </span>
+              </div>
+
+              {/* 2-COLUMN GRID FOR CANDIDATES ON ALL SCREENS */}
+              <div className="grid grid-cols-2 gap-4">
+                {candidates.map((candidate, index) => (
+                  <motion.div 
+                    key={candidate.id}
+                    className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-white to-slate-50 border border-slate-200 hover:shadow-2xl transition-all duration-500 hover:scale-[1.02] cursor-pointer"
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: index * 0.1 }}
+                    onClick={() => window.location.href = `/myevent/${event?.id}/candidate/${candidate.id}`}
+                  >
+                    <div className="relative p-3">
+                      {/* Candidate Image and Rank */}
+                      <div className="relative mb-3">
+                        <div className="w-full aspect-square rounded-xl overflow-hidden border-2 border-white shadow-lg group-hover:shadow-xl transition-all duration-300">
+                          {candidate.photo ? (
+                            <Image 
+                              src={candidate.photo} 
+                              alt={candidate.full_name} 
+                              width={200}
+                              height={200}
+                              className="object-cover w-full h-full group-hover:scale-110 transition-transform duration-500"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                              <Users className="w-8 h-8 text-gray-500" />
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Rank Badge */}
+                        <div 
+                          className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center shadow-lg border-2 border-white text-xs font-bold text-white"
+                          style={{ backgroundColor: pageColor }}
+                        >
+                          {index + 1}
+                        </div>
+                      </div>
+                      
+                      {/* Candidate Info */}
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-gray-900 text-sm leading-tight truncate">
+                              {getFirstName(candidate.full_name)}
+                            </h4>
+                            
+                          </div>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavorite(candidate.id);
+                            }}
+                            className="p-1 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 ml-1"
+                          >
+                            <Heart 
+                              className="w-3 h-3" 
+                              fill={favoriteCandidates.has(candidate.id) ? "currentColor" : "none"}
+                            />
+                          </button>
+                        </div>
+                        
+                        {/* Points Display */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1">
+                            <Star className="w-3 h-3" style={{ color: pageColor }} />
+                            <span className="font-bold text-xs" style={{ color: pageColor }}>
+                              {candidate.points?.toLocaleString() || '0'} pts
+                            </span>
+                          </div>
+                          
+                          {candidate.contest_number && (
+                            <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full border"
+                              style={{ borderColor: pageColor, color: pageColor, backgroundColor: `${pageColor}08` }}
+                            >
+                              #{candidate.contest_number}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              <Link 
+                href={`/myevent/${event?.id}/vote`}
+                className="block mt-6 px-4 py-2 text-center text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 text-sm"
+                style={{ 
+                  backgroundColor: pageColor,
+                  boxShadow: `0 10px 15px -3px ${pageColor}25, 0 4px 6px -4px ${pageColor}25`
+                }}
+              >
+                View All Candidates
+              </Link>
+            </motion.div>
+          </div>
+        )}
+      </div>
+    </section>
+  )}
           {/* NEWS SECTION - Only render if news exist */}
           {hasNews && (
             <section id="news" className="mt-12">

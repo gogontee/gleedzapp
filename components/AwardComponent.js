@@ -95,28 +95,6 @@ export default function AwardComponent({ event }) {
     setNominees(allNominees);
   };
 
-  const getUserName = async (userId) => {
-    try {
-      const [fansResult, publishersResult] = await Promise.all([
-        supabase.from('fans').select('full_name, name').eq('id', userId).single(),
-        supabase.from('publishers').select('full_name, name').eq('id', userId).single()
-      ]);
-
-      if (fansResult.data && !fansResult.error) {
-        return fansResult.data.full_name || fansResult.data.name || 'User';
-      }
-
-      if (publishersResult.data && !publishersResult.error) {
-        return publishersResult.data.full_name || publishersResult.data.name || 'User';
-      }
-
-      return 'User';
-    } catch (error) {
-      console.error("Error fetching user name:", error);
-      return 'User';
-    }
-  };
-
   const openVoteModal = (nominee, category) => {
     if (!user) {
       alert("Please login to vote");
@@ -147,7 +125,8 @@ export default function AwardComponent({ event }) {
     setVoting(selectedNominee.id);
 
     try {
-      const voterName = await getUserName(user.id);
+      // Use the authenticated user's email directly
+      const voterName = user.email || 'User';
 
       const newVoteCount = (selectedNominee.vote_count || 0) + voteCount;
       const { error: nomineeError } = await supabase

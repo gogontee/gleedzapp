@@ -1180,42 +1180,42 @@ export default function HomeClient({ logoUrl, posters }) {
           </section>
 
           {/* ADDED: Features Section */}
-          <section className="mt-12 md:mt-16">
-            <div className="text-center mb-6 md:mb-12">
-              <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-yellow-800 mb-3 md:mb-4">
-                Powerful Event Features
-              </h2>
-              <p className="text-sm md:text-base lg:text-lg text-gray-600 max-w-2xl mx-auto px-4">
-                Everything you need to create outstanding event experiences, all in one platform
-              </p>
-            </div>
+<section className="mt-12 md:mt-16">
+  <div className="text-center mb-6 md:mb-12">
+    <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-yellow-800 mb-3 md:mb-4">
+      Powerful Event Features
+    </h2>
+    <p className="text-sm md:text-base lg:text-lg text-gray-600 max-w-2xl mx-auto px-4">
+      Everything you need to create outstanding event experiences, all in one platform
+    </p>
+  </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
-              {features.map((feature, index) => {
-                const Icon = feature.icon;
-                return (
-                  <motion.div
-                    key={feature.title}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    whileHover={{ y: -5 }}
-                    className="bg-white border border-gray-200 rounded-xl md:rounded-2xl p-4 md:p-6 shadow-lg hover:shadow-xl transition-all duration-300 group"
-                  >
-                    <div className="w-8 h-8 md:w-10 md:h-10 lg:w-12 lg:h-12 bg-yellow-500 rounded-lg md:rounded-xl flex items-center justify-center mb-2 md:mb-3 lg:mb-4 group-hover:scale-110 transition-transform duration-300">
-                      <Icon className="w-4 h-4 md:w-5 md:h-5 lg:w-6 lg:h-6 text-white" />
-                    </div>
-                    <h3 className="text-base md:text-lg lg:text-xl font-bold text-gray-900 mb-2 md:mb-3">
-                      {feature.title}
-                    </h3>
-                    <p className="text-xs md:text-sm lg:text-base text-gray-600 leading-relaxed">
-                      {feature.description}
-                    </p>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </section>
+  <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6 lg:gap-8">
+    {features.map((feature, index) => {
+      const Icon = feature.icon;
+      return (
+        <motion.div
+          key={feature.title}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: index * 0.1 }}
+          whileHover={{ y: -5 }}
+          className="bg-white border border-gray-200 rounded-xl md:rounded-2xl p-3 md:p-6 shadow-lg hover:shadow-xl transition-all duration-300 group"
+        >
+          <div className="w-6 h-6 md:w-10 md:h-10 lg:w-12 lg:h-12 bg-yellow-500 rounded-lg md:rounded-xl flex items-center justify-center mb-2 md:mb-3 lg:mb-4 group-hover:scale-110 transition-transform duration-300">
+            <Icon className="w-3 h-3 md:w-5 md:h-5 lg:w-6 lg:h-6 text-white" />
+          </div>
+          <h3 className="text-sm md:text-lg lg:text-xl font-bold text-gray-900 mb-1 md:mb-3">
+            {feature.title}
+          </h3>
+          <p className="text-xs md:text-sm lg:text-base text-gray-600 leading-relaxed">
+            {feature.description}
+          </p>
+        </motion.div>
+      );
+    })}
+  </div>
+</section>
 
           {/* Testimonials */}
           <section className="mt-12 md:mt-16">

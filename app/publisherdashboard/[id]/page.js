@@ -19,6 +19,8 @@ import {
   TrendingDown,
   Users,
   Activity,
+  DollarSign,
+  Landmark,
 } from "lucide-react";
 
 import CreateEventClient from "./CreateEventClient";
@@ -27,11 +29,14 @@ import PublisherChat from "../../../components/chat";
 import MyEvents from "../../../components/MyEvents";
 import TransactionHistory from "../../../components/temp";
 import SettingsComponent from "../../../components/settings";
+import NairaWallet from "../../../components/NairaWallet";
+import UsdWallet from "../../../components/UsdWallet";
 
 export default function PublisherDashboardPage() {
   const params = useParams();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("overview");
+  const [activeWalletTab, setActiveWalletTab] = useState("token"); // token, naira, usd
   const [user, setUser] = useState(null);
   const [publisher, setPublisher] = useState(null);
   const [balance, setBalance] = useState(0);
@@ -43,7 +48,9 @@ export default function PublisherDashboardPage() {
     eventsCreated: 0,
     tokensGenerated: 0,
     tokensSpent: 0,
-    revenue: 0,
+    tokenRevenue: 0,
+    ngnGenerated: 0,
+    usdGenerated: 0,
     activeEvents: 0
   });
   const [loadingStats, setLoadingStats] = useState(true);
@@ -156,10 +163,40 @@ export default function PublisherDashboardPage() {
       const tokensSpent = tokenData
         ?.reduce((sum, transaction) => sum + (Number(transaction.tokens_out) || 0), 0) || 0;
 
-      // Revenue calculation: total token generated × 1000 naira minus 10%
+      // Token revenue calculation: total token generated × 1000 naira minus 10%
       const revenueBeforeDeduction = tokensGenerated * 1000;
       const tenPercentDeduction = revenueBeforeDeduction * 0.10;
-      const revenue = revenueBeforeDeduction - tenPercentDeduction;
+      const tokenRevenue = revenueBeforeDeduction - tenPercentDeduction;
+
+      // 4. Fiat Transactions - NGN generated
+      const { data: ngnData, error: ngnError } = await supabase
+        .from("fiat_transactions")
+        .select("amount")
+        .eq("publisher_id", user.id)
+        .eq("currency", "NGN");
+
+      if (ngnError) {
+        console.error("NGN transactions fetch error:", ngnError);
+        throw ngnError;
+      }
+
+      const ngnGenerated = ngnData
+        ?.reduce((sum, transaction) => sum + (Number(transaction.amount) || 0), 0) || 0;
+
+      // 5. Fiat Transactions - USD generated
+      const { data: usdData, error: usdError } = await supabase
+        .from("fiat_transactions")
+        .select("amount")
+        .eq("publisher_id", user.id)
+        .eq("currency", "USD");
+
+      if (usdError) {
+        console.error("USD transactions fetch error:", usdError);
+        throw usdError;
+      }
+
+      const usdGenerated = usdData
+        ?.reduce((sum, transaction) => sum + (Number(transaction.amount) || 0), 0) || 0;
 
       console.log("Calculated stats:", {
         eventsCreated,
@@ -168,14 +205,18 @@ export default function PublisherDashboardPage() {
         tokensSpent,
         revenueBeforeDeduction,
         tenPercentDeduction,
-        revenue
+        tokenRevenue,
+        ngnGenerated,
+        usdGenerated
       }); // Debug log
 
       setStats({
         eventsCreated: eventsCreated || 0,
         tokensGenerated,
         tokensSpent,
-        revenue: Math.max(0, revenue), // Ensure revenue is not negative
+        tokenRevenue: Math.max(0, tokenRevenue), // Ensure revenue is not negative
+        ngnGenerated,
+        usdGenerated,
         activeEvents: activeEvents || 0
       });
 
@@ -217,7 +258,9 @@ export default function PublisherDashboardPage() {
         eventsCreated: 0,
         tokensGenerated: 0,
         tokensSpent: 0,
-        revenue: 0,
+        tokenRevenue: 0,
+        ngnGenerated: 0,
+        usdGenerated: 0,
         activeEvents: 0
       });
 
@@ -312,6 +355,12 @@ export default function PublisherDashboardPage() {
     { id: "events", label: "My Events", icon: PlusCircle },
     { id: "chat", label: "Chat", icon: MessageCircle },
     { id: "settings", label: "Settings", icon: Settings },
+  ];
+
+  const walletTabs = [
+    { id: "token", label: "Token Wallet", icon: Coins, color: "text-yellow-600" },
+    { id: "naira", label: "Naira Wallet", icon: Landmark, color: "text-green-600" },
+    { id: "usd", label: "USD Wallet", icon: DollarSign, color: "text-blue-600" },
   ];
 
   if (!user || !publisher)
@@ -429,7 +478,14 @@ export default function PublisherDashboardPage() {
             onRefresh={fetchStats}
           />
         )}
-        {activeTab === "wallet" && <WalletComponent />}
+        {activeTab === "wallet" && (
+          <WalletTab 
+            activeWalletTab={activeWalletTab}
+            setActiveWalletTab={setActiveWalletTab}
+            walletTabs={walletTabs}
+            user={user}
+          />
+        )}
         {activeTab === "transactions" && <TransactionHistory />}
         {activeTab === "events" && (
           <MyEvents
@@ -474,7 +530,14 @@ function OverviewTab({ stats, loading, onRefresh }) {
     return new Intl.NumberFormat().format(num);
   };
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = (amount, currency = 'NGN') => {
+    if (currency === 'USD') {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD'
+      }).format(amount);
+    }
+    
     return new Intl.NumberFormat('en-NG', {
       style: 'currency',
       currency: 'NGN'
@@ -510,10 +573,28 @@ function OverviewTab({ stats, loading, onRefresh }) {
       borderColor: "border-red-200"
     },
     {
-      title: "Revenue",
-      value: formatCurrency(stats.revenue),
+      title: "Token Revenue",
+      value: formatCurrency(stats.tokenRevenue),
       description: "Net revenue after 10% fee",
       icon: Coins,
+      color: "blue",
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200"
+    },
+    {
+      title: "NGN Generated",
+      value: formatCurrency(stats.ngnGenerated),
+      description: "Total Naira revenue",
+      icon: Landmark,
+      color: "green",
+      bgColor: "bg-green-50",
+      borderColor: "border-green-200"
+    },
+    {
+      title: "USD Generated",
+      value: formatCurrency(stats.usdGenerated, 'USD'),
+      description: "Total USD revenue",
+      icon: DollarSign,
       color: "blue",
       bgColor: "bg-blue-50",
       borderColor: "border-blue-200"
@@ -523,17 +604,17 @@ function OverviewTab({ stats, loading, onRefresh }) {
       value: formatNumber(stats.activeEvents),
       description: "Currently running events",
       icon: Users,
-      color: "green",
-      bgColor: "bg-green-50",
-      borderColor: "border-green-200"
+      color: "purple",
+      bgColor: "bg-purple-50",
+      borderColor: "border-purple-200"
     }
   ];
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
-          {[1, 2, 3, 4, 5].map((item) => (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+          {[1, 2, 3, 4, 5, 6, 7].map((item) => (
             <div key={item} className="bg-white p-3 md:p-4 rounded-lg md:rounded-xl shadow-sm border animate-pulse">
               <div className="h-3 bg-gray-200 rounded mb-2 md:mb-3"></div>
               <div className="h-6 md:h-8 bg-gray-200 rounded mb-1 md:mb-2"></div>
@@ -563,8 +644,8 @@ function OverviewTab({ stats, loading, onRefresh }) {
         </button>
       </div>
       
-      {/* Stats Grid - 2 columns on mobile, 3-5 on larger screens */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+      {/* Stats Grid - 2 columns on mobile, 3-4 on larger screens */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
         {statCards.map((card, index) => (
           <StatCard key={index} {...card} />
         ))}
@@ -580,6 +661,7 @@ function StatCard({ title, value, description, icon: Icon, bgColor, borderColor 
       case 'red': return 'text-red-600';
       case 'blue': return 'text-blue-600';
       case 'yellow': return 'text-yellow-600';
+      case 'purple': return 'text-purple-600';
       default: return 'text-gray-600';
     }
   };
@@ -600,6 +682,58 @@ function StatCard({ title, value, description, icon: Icon, bgColor, borderColor 
       <p className="text-xs text-gray-500 leading-relaxed md:hidden">
         {description.split(' ').slice(0, 3).join(' ')}...
       </p>
+    </div>
+  );
+}
+
+// ===== Wallet Tab Component =====
+function WalletTab({ activeWalletTab, setActiveWalletTab, walletTabs, user }) {
+  return (
+    <div className="space-y-4 md:space-y-6">
+      {/* Wallet Type Tabs - Ultra compact for mobile */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1 md:p-4">
+        <div className="flex gap-1 md:gap-3">
+          {walletTabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeWalletTab === tab.id;
+            
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveWalletTab(tab.id)}
+                className={`flex items-center justify-center gap-1 md:gap-3 px-2 md:px-4 py-2 md:py-3 rounded-lg md:rounded-xl transition-all duration-200 flex-1 text-center min-w-0 ${
+                  isActive
+                    ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-2 border-yellow-300 shadow-sm'
+                    : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                }`}
+              >
+                <Icon 
+                  className={`w-3 h-3 md:w-5 md:h-5 flex-shrink-0 ${
+                    isActive ? tab.color : 'text-gray-500'
+                  }`} 
+                />
+                <span className={`text-xs font-medium truncate hidden sm:inline ${
+                  isActive ? 'text-gray-900' : 'text-gray-600'
+                }`}>
+                  {tab.label}
+                </span>
+                <span className={`text-xs font-medium truncate sm:hidden ${
+                  isActive ? 'text-gray-900' : 'text-gray-600'
+                }`}>
+                  {tab.id === 'token' ? 'Token' : tab.id === 'naira' ? 'NGN' : 'USD'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Wallet Content */}
+      <div className="min-h-[400px]">
+        {activeWalletTab === "token" && <WalletComponent />}
+        {activeWalletTab === "naira" && <NairaWallet session={user} />}
+        {activeWalletTab === "usd" && <UsdWallet session={user} />}
+      </div>
     </div>
   );
 }
