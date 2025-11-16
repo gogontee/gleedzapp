@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Eye, Vote, Gift, Users, Trophy, TrendingUp, Search, X, Play, Pause, Sparkles, Crown, Award, Star } from "lucide-react";
+import { Vote, Gift, Users, Trophy, TrendingUp, Search, X, Play, Pause, Sparkles, Crown, Award, Star } from "lucide-react";
 import { supabase } from "../../../../lib/supabaseClient";
 import EventHeader from "../../../../components/EventHeader";
 
@@ -134,6 +134,17 @@ export default function EventVotePage() {
       subscription.unsubscribe();
     };
   }, [eventId, showRankingModal]);
+
+  // Auto-refresh ranking data every second when modal is open and not paused
+  useEffect(() => {
+    if (!showRankingModal || isRankingPaused) return;
+
+    const interval = setInterval(() => {
+      fetchRankingData();
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [showRankingModal, isRankingPaused]);
 
   useEffect(() => {
     if (!searchTerm.trim()) {
@@ -381,7 +392,9 @@ export default function EventVotePage() {
 
 function CandidateCard({ candidate, eventId, rank, pageColor }) {
   const [imageError, setImageError] = useState(false);
-  const progressPercentage = ((candidate.votes || 0) / 10);
+  
+  // Calculate points: (votes + gifts) / 10
+  const points = ((candidate.votes || 0) + (candidate.gifts || 0)) / 10;
   
   // Check toggle settings - default to true if null/undefined
   const showVotes = candidate.votes_toggle !== false;
@@ -392,111 +405,100 @@ function CandidateCard({ candidate, eventId, rank, pageColor }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: rank * 0.1 }}
-      className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 hover:scale-[1.02]"
+      className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 hover:scale-[1.02] cursor-pointer"
     >
-      <div className="relative h-40 sm:h-48 overflow-hidden">
-        {candidate.photo && !imageError ? (
-          <Image
-            src={candidate.photo}
-            alt={candidate.full_name}
-            fill
-            className="object-cover group-hover:scale-110 transition-transform duration-500"
-            onError={() => setImageError(true)}
-            unoptimized
-          />
-        ) : (
-          <div 
-            className="w-full h-full flex items-center justify-center"
-            style={{ backgroundColor: `${pageColor}15` }}
-          >
-            <Users className="w-10 h-10 sm:w-12 sm:h-12" style={{ color: pageColor }} />
-          </div>
-        )}
-        
-        <div 
-          className="absolute top-2 left-2 w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-lg border border-white/20 backdrop-blur-sm"
-          style={{ backgroundColor: pageColor }}
-        >
-          {rank}
-        </div>
-        
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-        
-        {/* Conditionally render vote and gift counts */}
-        <div className="absolute bottom-2 left-2 right-2">
-          <div className="flex items-center justify-between text-white text-xs">
-            {/* Show votes only if votes_toggle is true */}
-            {showVotes && (
-              <div className="flex items-center gap-1">
-                <Vote className="w-3 h-3" />
-                <span className="font-semibold">{candidate.votes?.toLocaleString() || 0}</span>
-              </div>
-            )}
-            
-            {/* Show gifts only if gifts_toggle is true */}
-            {showGifts && (
-              <div className="flex items-center gap-1">
-                <Gift className="w-3 h-3" />
-                <span className="font-semibold">{candidate.gifts?.toLocaleString() || 0}</span>
-              </div>
-            )}
-            
-            {/* If both are hidden, show empty space to maintain layout */}
-            {!showVotes && !showGifts && <div />}
-          </div>
-        </div>
-        
-        <Link 
-          href={`/myevent/${eventId}/candidate/${candidate.id}`}
-          className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 bg-white/90 hover:bg-white text-gray-900 rounded-lg text-xs font-medium transition-all duration-200 hover:scale-105 shadow-md"
-        >
-          <Eye className="w-3 h-3" />
-          <span className="hidden xs:inline">View</span>
-        </Link>
-      </div>
-
-      <div className="p-3">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold text-gray-900 text-sm line-clamp-1">
-            {candidate.full_name}
-          </h3>
-          
-          {candidate.contest_number && (
-            <span 
-              className="text-xs font-medium px-2 py-1 rounded-full border hidden xs:block"
-              style={{ borderColor: pageColor, color: pageColor, backgroundColor: `${pageColor}08` }}
+      <Link href={`/myevent/${eventId}/candidate/${candidate.id}`}>
+        <div className="relative h-48 sm:h-56 overflow-hidden">
+          {candidate.photo && !imageError ? (
+            <Image
+              src={candidate.photo}
+              alt={candidate.full_name}
+              fill
+              className="object-cover group-hover:scale-110 transition-transform duration-500"
+              onError={() => setImageError(true)}
+              unoptimized
+              sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+            />
+          ) : (
+            <div 
+              className="w-full h-full flex items-center justify-center"
+              style={{ backgroundColor: `${pageColor}15` }}
             >
-              #{candidate.contest_number}
-            </span>
-          )}
-        </div>
-
-        {/* Conditionally render progress bar only if votes_toggle is true */}
-        {showVotes && (
-          <div className="mt-2">
-            <div className="flex justify-between text-xs text-gray-600 mb-1">
-              <span>Progress</span>
-              <span>{progressPercentage.toFixed(1)}%</span>
+              <Users className="w-10 h-10 sm:w-12 sm:h-12" style={{ color: pageColor }} />
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-1.5">
-              <div 
-                className="h-1.5 rounded-full transition-all duration-500"
-                style={{ 
-                  backgroundColor: pageColor,
-                  width: `${Math.min(progressPercentage, 100)}%`
-                }}
-              ></div>
+          )}
+          
+          <div 
+            className="absolute top-2 left-2 w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-lg border border-white/20 backdrop-blur-sm"
+            style={{ backgroundColor: pageColor }}
+          >
+            {rank}
+          </div>
+          
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          
+          {/* Conditionally render vote and gift counts */}
+          <div className="absolute bottom-2 left-2 right-2">
+            <div className="flex items-center justify-between text-white text-xs">
+              {/* Show votes only if votes_toggle is true */}
+              {showVotes && (
+                <div className="flex items-center gap-1">
+                  <Vote className="w-3 h-3" />
+                  <span className="font-semibold">{candidate.votes?.toLocaleString() || 0}</span>
+                </div>
+              )}
+              
+              {/* Show gifts only if gifts_toggle is true */}
+              {showGifts && (
+                <div className="flex items-center gap-1">
+                  <Gift className="w-3 h-3" />
+                  <span className="font-semibold">{candidate.gifts?.toLocaleString() || 0}</span>
+                </div>
+              )}
+              
+              {/* If both are hidden, show empty space to maintain layout */}
+              {!showVotes && !showGifts && <div />}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+
+        <div className="p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold text-gray-900 text-sm line-clamp-1">
+              {candidate.full_name}
+            </h3>
+            
+            {candidate.contest_number && (
+              <span 
+                className="text-xs font-medium px-2 py-1 rounded-full border hidden xs:block"
+                style={{ borderColor: pageColor, color: pageColor, backgroundColor: `${pageColor}08` }}
+              >
+                #{candidate.contest_number}
+              </span>
+            )}
+          </div>
+
+          {/* Points display */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-600">Points</span>
+            <span 
+              className="text-sm font-bold"
+              style={{ color: pageColor }}
+            >
+              {points.toFixed(1)}
+            </span>
+          </div>
+        </div>
+      </Link>
     </motion.div>
   );
 }
 
 function CandidateListItem({ candidate, eventId, rank, pageColor }) {
   const [imageError, setImageError] = useState(false);
-  const progressPercentage = ((candidate.votes || 0) / 10);
+  
+  // Calculate points: (votes + gifts) / 10
+  const points = ((candidate.votes || 0) + (candidate.gifts || 0)) / 10;
   
   // Check toggle settings - default to true if null/undefined
   const showVotes = candidate.votes_toggle !== false;
@@ -507,7 +509,7 @@ function CandidateListItem({ candidate, eventId, rank, pageColor }) {
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: rank * 0.05 }}
-      className="group bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-gray-200 hover:scale-[1.005]"
+      className="group bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 border border-gray-200 hover:scale-[1.005] cursor-pointer"
     >
       <Link 
         href={`/myevent/${eventId}/candidate/${candidate.id}`}
@@ -522,13 +524,13 @@ function CandidateListItem({ candidate, eventId, rank, pageColor }) {
           </div>
         </div>
 
-        <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 mx-2 rounded-xl overflow-hidden border border-gray-200">
+        <div className="flex-shrink-0 w-12 h-16 sm:w-14 sm:h-20 mx-2 rounded-xl overflow-hidden border border-gray-200">
           {candidate.photo && !imageError ? (
             <Image
               src={candidate.photo}
               alt={candidate.full_name}
-              width={48}
-              height={48}
+              width={56}
+              height={80}
               className="w-full h-full object-cover"
               onError={() => setImageError(true)}
               unoptimized
@@ -580,30 +582,19 @@ function CandidateListItem({ candidate, eventId, rank, pageColor }) {
         </div>
 
         <div className="flex-shrink-0 w-16 sm:w-20 text-right">
-          {/* Conditionally render progress bar only if votes_toggle is true */}
-          {showVotes && (
-            <>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-xs text-gray-600 hidden sm:block">Progress</span>
-                <span className="text-xs font-medium" style={{ color: pageColor }}>
-                  {progressPercentage.toFixed(1)}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
-                <div 
-                  className="h-1.5 rounded-full transition-all duration-500"
-                  style={{ 
-                    backgroundColor: pageColor,
-                    width: `${Math.min(progressPercentage, 100)}%`
-                  }}
-                ></div>
-              </div>
-            </>
-          )}
+          {/* Points display */}
+          <div className="mb-2">
+            <div className="text-xs text-gray-600">Points</div>
+            <div 
+              className="text-sm font-bold"
+              style={{ color: pageColor }}
+            >
+              {points.toFixed(1)}
+            </div>
+          </div>
           
-          <div className="flex items-center justify-end gap-1 text-xs">
-            <Eye className="w-3 h-3 text-gray-600" />
-            <span className="text-gray-600 hidden sm:inline">View</span>
+          <div className="text-xs text-gray-600">
+            View Details
           </div>
         </div>
       </Link>

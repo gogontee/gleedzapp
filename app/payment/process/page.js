@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { supabase } from '../../../lib/supabaseClient';
 
 export default function PaymentVerification() {
   const searchParams = useSearchParams();
@@ -20,78 +19,40 @@ export default function PaymentVerification() {
           return;
         }
 
-        // Use API route for verification
+        // Use API route for verification - this will handle everything
         const verificationResponse = await fetch('/api/vote/verify', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ reference })
+          body: JSON.stringify({ 
+            reference,
+            action: 'complete_payment' // Add this flag
+          })
         });
 
-        const verification = await verificationResponse.json();
+        const result = await verificationResponse.json();
 
-        if (verification.error) {
-          throw new Error(verification.error);
+        if (!verificationResponse.ok) {
+          throw new Error(result.error || 'Payment verification failed');
         }
 
-        if (verification.data.status === 'success') {
-          // Update fiat transaction status
-          const { data: transaction, error: transactionError } = await supabase
-            .from('fiat_transactions')
-            .update({
-              status: 'completed',
-              paystack_transaction_id: verification.data.id,
-              updated_at: new Date().toISOString()
-            })
-            .eq('paystack_reference', reference)
-            .select()
-            .single();
-
-          if (transactionError) throw transactionError;
-
-          // Update candidate votes (same for both guest and authenticated users)
-          const { data: candidateData } = await supabase
-            .from('candidates')
-            .select('votes, gifts')
-            .eq('id', transaction.candidate_id)
-            .single();
-
-          const newVotes = (candidateData?.votes || 0) + transaction.points;
-          const newPoints = (newVotes + (candidateData?.gifts || 0)) / 10;
-
-          await supabase
-            .from('candidates')
-            .update({ votes: newVotes, points: newPoints })
-            .eq('id', transaction.candidate_id);
-
+        if (result.success) {
           setStatus('success');
-          setMessage('Payment successful! Your votes have been counted.');
-
-          // Show appropriate message for guest vs authenticated users
-          if (transaction.guest_email) {
-            setMessage(`Payment successful! Your votes have been counted. Thank you ${transaction.guest_email}!`);
-          } else {
-            setMessage('Payment successful! Your votes have been counted.');
-          }
+          setMessage(result.message || 'Payment successful! Your votes have been counted.');
 
           // Redirect to candidate page after 3 seconds
           setTimeout(() => {
-            window.location.href = `/myevent/${transaction.event_id}/candidate/${transaction.candidate_id}`;
+            if (result.transaction?.event_id && result.transaction?.candidate_id) {
+              window.location.href = `/myevent/${result.transaction.event_id}/candidate/${result.transaction.candidate_id}`;
+            } else {
+              window.location.href = '/'; // Fallback redirect
+            }
           }, 3000);
 
         } else {
-          // Payment failed
-          await supabase
-            .from('fiat_transactions')
-            .update({
-              status: 'failed',
-              updated_at: new Date().toISOString()
-            })
-            .eq('paystack_reference', reference);
-
           setStatus('error');
-          setMessage('Payment failed. Please try again.');
+          setMessage(result.error || 'Payment failed. Please try again.');
         }
 
       } catch (error) {
