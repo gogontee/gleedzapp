@@ -24,7 +24,6 @@ import {
   Twitter,
   LogOut,
   BookOpen,
-  // ADDED: Feature icons
   Layout,
   Vote,
   Ticket,
@@ -113,6 +112,17 @@ export default function HomeClient({ logoUrl, posters }) {
   const [submittingTestimonial, setSubmittingTestimonial] = useState(false);
   const [showLogoutDropdown, setShowLogoutDropdown] = useState(false);
   const dropdownRef = useRef(null);
+  const [showPublisherModal, setShowPublisherModal] = useState(false);
+
+  // FIXED: Better cache busting that works with hydration
+  const getCacheBustedUrl = (url, isClient = false) => {
+    if (!url) return url;
+    if (url.endsWith('.mp4') || url.includes('.mp4')) {
+      // Use a stable cache busting parameter that doesn't cause hydration mismatch
+      return `${url}?v=1`; // Fixed version instead of timestamp
+    }
+    return url;
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -135,9 +145,9 @@ export default function HomeClient({ logoUrl, posters }) {
         const { data, error } = await supabase
           .from("testimonials")
           .select("id, name, avatar_url, message, rating, created_at")
-          .eq("featured", true) // UPDATED: Only fetch featured testimonials
+          .eq("featured", true)
           .order("created_at", { ascending: false })
-          .limit(6); // Limit to 6 testimonials
+          .limit(6);
 
         if (error) {
           console.error("Error fetching testimonials:", error);
@@ -153,7 +163,7 @@ export default function HomeClient({ logoUrl, posters }) {
     fetchTestimonials();
   }, []);
 
-  // Fetch hero slides from gleedz_hero column - UPDATED
+  // Fetch hero slides from gleedz_hero column
   useEffect(() => {
     const fetchHeroSlides = async () => {
       try {
@@ -192,14 +202,12 @@ export default function HomeClient({ logoUrl, posters }) {
         }
 
         if (data && data.hero) {
-          // Transform the data to match our expected format
           const transformedSlides = data.hero.map(slide => ({
             ...slide,
             isVideo: slide.type === "video"
           }));
           setHeroSlides(transformedSlides);
         } else {
-          // Fallback if no data
           setHeroSlides([
             {
               src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero5.jpg",
@@ -284,7 +292,7 @@ export default function HomeClient({ logoUrl, posters }) {
         if (user.role === "publisher") {
           const { data: publisher } = await supabase
             .from("publishers")
-            .select("id, avatar_url, full_name")
+            .select("id, avatar_url, name")
             .eq("id", user.id)
             .single();
           setUserData({ ...user, ...publisher });
@@ -309,7 +317,7 @@ export default function HomeClient({ logoUrl, posters }) {
     fetchUserData();
   }, []);
 
-  // Fetch top events - UPDATED: Only fetch active events and limit to 6
+  // Fetch top events
   useEffect(() => {
     const fetchTopEvents = async () => {
       try {
@@ -318,10 +326,10 @@ export default function HomeClient({ logoUrl, posters }) {
           .from("events")
           .select("*")
           .eq("launch", true)
-          .eq("active", true) // UPDATED: Only fetch active events
+          .eq("active", true)
           .not("promote", "is", null)
           .order("promote", { ascending: false })
-          .limit(6); // UPDATED: Limit to 6 events
+          .limit(6);
 
         if (error) {
           console.error("Error fetching top events:", error);
@@ -339,7 +347,7 @@ export default function HomeClient({ logoUrl, posters }) {
     fetchTopEvents();
   }, []);
 
-  // Auto change hero slides - UPDATED with proper timing logic
+  // Auto change hero slides
   useEffect(() => {
     if (heroSlides.length === 0) return;
     
@@ -347,11 +355,8 @@ export default function HomeClient({ logoUrl, posters }) {
     const currentSlide = heroSlides[currentHero];
     
     if (currentSlide && currentSlide.type === "video") {
-      // For videos, we'll handle the transition in the video's onEnded event
-      // So we don't set an interval for videos
       return;
     } else {
-      // For images, use 6 second interval
       interval = setInterval(() => {
         setCurrentHero((prev) => (prev + 1) % heroSlides.length);
       }, 6000);
@@ -372,17 +377,14 @@ export default function HomeClient({ logoUrl, posters }) {
     let timer;
 
     if (isVideo) {
-      // For videos, wait for the video to end
       const handleVideoEnd = () => {
         setCurrentPoster((prev) => (prev + 1) % posters.length);
       };
 
-      // Add event listener to the video element
-      const videoElement = document.querySelector(`video[src="${current.url}"]`);
+      const videoElement = document.querySelector(`video[src="${getCacheBustedUrl(current.url)}"]`);
       if (videoElement) {
         videoElement.addEventListener('ended', handleVideoEnd);
         
-        // Fallback: if video doesn't end within 30 seconds, move to next
         timer = setTimeout(() => {
           videoElement.removeEventListener('ended', handleVideoEnd);
           setCurrentPoster((prev) => (prev + 1) % posters.length);
@@ -393,13 +395,11 @@ export default function HomeClient({ logoUrl, posters }) {
           if (timer) clearTimeout(timer);
         };
       } else {
-        // If video element not found, use fallback duration
         timer = setTimeout(() => {
           setCurrentPoster((prev) => (prev + 1) % posters.length);
         }, 10000);
       }
     } else {
-      // For images, use the fixed duration
       timer = setTimeout(() => {
         setCurrentPoster((prev) => (prev + 1) % posters.length);
       }, 8000);
@@ -410,14 +410,13 @@ export default function HomeClient({ logoUrl, posters }) {
     };
   }, [currentPoster, posters]);
 
-  // Handle video end for hero slides - NEW FUNCTION
+  // Handle video end for hero slides
   const handleVideoEnd = () => {
     setCurrentHero((prev) => (prev + 1) % heroSlides.length);
   };
 
-  // Handle event tab click - ADDED MISSING FUNCTION
+  // Handle event tab click
   const handleEventTabClick = (tab) => {
-    // Navigate to /eventz with the query parameter for event type
     router.push(`/eventz?type=${encodeURIComponent(tab.query)}`);
   };
 
@@ -426,8 +425,6 @@ export default function HomeClient({ logoUrl, posters }) {
       router.push("/login");
       return;
     }
-
-    // Toggle logout dropdown for logged-in users
     setShowLogoutDropdown(!showLogoutDropdown);
   };
 
@@ -440,12 +437,9 @@ export default function HomeClient({ logoUrl, posters }) {
         return;
       }
       
-      // Clear local state
       setSession(null);
       setUserData(null);
       setShowLogoutDropdown(false);
-      
-      // Refresh the page to update the UI
       router.refresh();
       
     } catch (error) {
@@ -453,8 +447,6 @@ export default function HomeClient({ logoUrl, posters }) {
       alert("Error signing out. Please try again.");
     }
   };
-
-  const [showPublisherModal, setShowPublisherModal] = useState(false);
 
   const handleEventMall = () => {
     if (!session) {
@@ -473,7 +465,6 @@ export default function HomeClient({ logoUrl, posters }) {
     setShowPublisherModal(false);
   };
 
-  // NEW: Handle dashboard navigation based on user role
   const handleDashboardClick = () => {
     if (!session) {
       setShowLoginModal(true);
@@ -485,10 +476,8 @@ export default function HomeClient({ logoUrl, posters }) {
     } else if (userData?.role === "fans") {
       router.push(`/fansdashboard/${userData.id}`);
     } else if (userData?.role === "admin") {
-      // You can add admin dashboard route here if needed
       router.push(`/admindashboard/${userData.id}`);
     } else {
-      // Fallback for unknown roles
       setShowLoginModal(true);
     }
   };
@@ -517,7 +506,6 @@ export default function HomeClient({ logoUrl, posters }) {
     setSubmittingTestimonial(true);
 
     try {
-      // Get first name from full_name
       const firstName = userData.full_name ? userData.full_name.split(' ')[0] : 'User';
       
       const { data, error } = await supabase
@@ -529,7 +517,7 @@ export default function HomeClient({ logoUrl, posters }) {
             avatar_url: userData.avatar_url,
             message: testimonialForm.message.trim(),
             rating: testimonialForm.rating,
-            featured: false // New testimonials are not featured by default
+            featured: false
           }
         ])
         .select();
@@ -540,20 +528,16 @@ export default function HomeClient({ logoUrl, posters }) {
         return;
       }
 
-      // Refresh testimonials - UPDATED: Only fetch featured testimonials
       const { data: newTestimonials } = await supabase
         .from("testimonials")
         .select("id, name, avatar_url, message, rating, created_at")
-        .eq("featured", true) // UPDATED: Only fetch featured testimonials
+        .eq("featured", true)
         .order("created_at", { ascending: false })
         .limit(6);
 
       setTestimonials(newTestimonials || []);
-      
-      // Reset form and close modal
       setTestimonialForm({ message: "", rating: 5 });
       setShowTestimonialModal(false);
-      
       alert("Thank you for your testimonial! It will be reviewed before being featured.");
       
     } catch (error) {
@@ -759,18 +743,16 @@ export default function HomeClient({ logoUrl, posters }) {
         )}
       </AnimatePresence>
 
-      {/* Hero Section - UPDATED FOR MOBILE */}
+      {/* Hero Section */}
       <section className="relative w-full flex items-center justify-center overflow-hidden rounded-b-[2rem] shadow-xl bg-black">
-        {/* Mobile: 10:5 ratio (2:1), Desktop: 70vh */}
         <div className="w-full aspect-[2/1] md:aspect-auto md:h-[70vh]">
-          {/* Background slideshow - UPDATED */}
           <AnimatePresence mode="wait">
             {heroSlides.map((slide, idx) =>
               idx === currentHero ? (
                 slide.type === "video" ? (
                   <motion.video
                     key={idx}
-                    src={slide.src}
+                    src={getCacheBustedUrl(slide.src)}
                     autoPlay
                     muted
                     playsInline
@@ -780,6 +762,10 @@ export default function HomeClient({ logoUrl, posters }) {
                     exit={{ opacity: 0 }}
                     transition={{ duration: 1 }}
                     onEnded={handleVideoEnd}
+                    onError={(e) => {
+                      console.error('Video failed to load:', slide.src);
+                      handleVideoEnd();
+                    }}
                   />
                 ) : (
                   <motion.div
@@ -804,32 +790,32 @@ export default function HomeClient({ logoUrl, posters }) {
           </AnimatePresence>
         </div>
 
-        {/* Top Bar - IMPROVED MOBILE ALIGNMENT */}
+        {/* Top Bar */}
         <div className="absolute top-3 md:top-4 left-3 md:left-4 right-3 md:right-4 flex items-center justify-between z-20">
-          {/* Logo */}
+          {/* Logo - FIXED: Added priority prop */}
           {logoUrl ? (
-            <Image
-              src={logoUrl}
-              alt="Logo"
-              width={60}
-              height={30}
-              className="rounded-lg object-contain"
-              unoptimized
-            />
+            <div className="relative w-15 h-8 md:w-20 md:h-10">
+              <Image
+                src={logoUrl}
+                alt="Logo"
+                fill
+                className="rounded-lg object-contain"
+                unoptimized
+                priority // FIXED: Added priority for LCP
+              />
+            </div>
           ) : (
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-gold-600 flex items-center justify-center text-white font-bold text-sm md:text-base">
               G
             </div>
           )}
 
-          {/* Right side: TV + BookOpen + UserCircle/Profile with Logout Dropdown - IMPROVED ALIGNMENT */}
+          {/* Right side icons */}
           <div className="flex gap-2 md:gap-4 items-center">
-            {/* TV Icon - Smaller on mobile */}
             <Link href="/gleedztv" className="text-white hover:scale-110 transition">
               <Tv className="w-5 h-5 md:w-6 md:h-6 cursor-pointer" />
             </Link>
 
-            {/* BookOpen Icon - Smaller on mobile */}
             <button 
               onClick={() => router.push("/gleedz")}
               className="text-white hover:scale-110 transition"
@@ -837,7 +823,6 @@ export default function HomeClient({ logoUrl, posters }) {
               <BookOpen className="w-5 h-5 md:w-6 md:h-6 cursor-pointer" />
             </button>
 
-            {/* User Profile - Better alignment */}
             <div className="relative" ref={dropdownRef}>
               <div
                 className="cursor-pointer hover:scale-110 transition flex items-center justify-center"
@@ -847,20 +832,20 @@ export default function HomeClient({ logoUrl, posters }) {
                 {!session ? (
                   <UserCircle className="w-5 h-5 md:w-6 md:h-6 text-white" />
                 ) : userData?.avatar_url ? (
-                  <Image
-                    src={userData.avatar_url}
-                    alt="Profile"
-                    width={20}
-                    height={20}
-                    className="w-5 h-5 md:w-6 md:h-6 rounded-full object-cover border border-white"
-                    unoptimized
-                  />
+                  <div className="relative w-6 h-6 md:w-8 md:h-8">
+                    <Image
+                      src={userData.avatar_url}
+                      alt="Profile"
+                      fill
+                      className="rounded-full object-cover border border-white"
+                      unoptimized
+                    />
+                  </div>
                 ) : (
                   <UserCircle className="w-5 h-5 md:w-6 md:h-6 text-white" />
                 )}
               </div>
 
-              {/* Logout Dropdown */}
               <AnimatePresence>
                 {showLogoutDropdown && session && (
                   <motion.div
@@ -874,13 +859,15 @@ export default function HomeClient({ logoUrl, posters }) {
                     <div className="p-4">
                       <div className="flex items-center gap-3 mb-3">
                         {userData?.avatar_url ? (
-                          <Image
-                            src={userData.avatar_url}
-                            alt="Profile"
-                            width={32}
-                            height={32}
-                            className="w-8 h-8 rounded-full object-cover"
-                          />
+                          <div className="relative w-8 h-8">
+                            <Image
+                              src={userData.avatar_url}
+                              alt="Profile"
+                              fill
+                              className="rounded-full object-cover"
+                              unoptimized
+                            />
+                          </div>
                         ) : (
                           <UserCircle size={32} className="text-gray-400" />
                         )}
@@ -911,51 +898,47 @@ export default function HomeClient({ logoUrl, posters }) {
           </div>
         </div>
 
-        {/* Call to Action - SMALLER BUTTONS ON MOBILE - UPDATED */}
-<AnimatePresence mode="wait">
-  {heroSlides.map((slide, idx) =>
-    idx === currentHero ? (
-      <motion.div
-        key={idx}
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -40 }}
-        transition={{ duration: 0.8 }}
-        className="absolute bottom-6 md:bottom-10 left-1/2 transform -translate-x-1/2 text-center text-white px-4 z-20 w-full max-w-xs md:max-w-none"
-      >
-        {/* Render caption if exists */}
-        {slide.caption && (
-          <h2 className="text-xs md:text-xl lg:text-2xl font-bold drop-shadow-lg mb-1 md:mb-2 px-2">
-            {slide.caption}
-          </h2>
-        )}
-        
-        {/* Render tagline if exists */}
-        {slide.tagline && (
-          <p className="text-xs md:text-base lg:text-lg drop-shadow-lg mb-2 md:mb-3 px-2">
-            {slide.tagline}
-          </p>
-        )}
-        
-        {/* Render CTA button only if label exists */}
-        {slide.cta && slide.cta.label && (
-          <Link
-            href={slide.cta.href || "#"}
-            className="inline-block px-3 py-1 md:px-4 md:py-2 bg-yellow-600 hover:bg-yellow-700 rounded-full shadow-lg font-semibold transition text-xs md:text-sm"
-          >
-            {slide.cta.label}
-          </Link>
-        )}
-      </motion.div>
-    ) : null
-  )}
-</AnimatePresence>
+        {/* Call to Action */}
+        <AnimatePresence mode="wait">
+          {heroSlides.map((slide, idx) =>
+            idx === currentHero ? (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -40 }}
+                transition={{ duration: 0.8 }}
+                className="absolute bottom-6 md:bottom-10 left-1/2 transform -translate-x-1/2 text-center text-white px-4 z-20 w-full max-w-xs md:max-w-none"
+              >
+                {slide.caption && (
+                  <h2 className="text-xs md:text-xl lg:text-2xl font-bold drop-shadow-lg mb-1 md:mb-2 px-2">
+                    {slide.caption}
+                  </h2>
+                )}
+                
+                {slide.tagline && (
+                  <p className="text-xs md:text-base lg:text-lg drop-shadow-lg mb-2 md:mb-3 px-2">
+                    {slide.tagline}
+                  </p>
+                )}
+                
+                {slide.cta && slide.cta.label && (
+                  <Link
+                    href={slide.cta.href || "#"}
+                    className="inline-block px-3 py-1 md:px-4 md:py-2 bg-yellow-600 hover:bg-yellow-700 rounded-full shadow-lg font-semibold transition text-xs md:text-sm"
+                  >
+                    {slide.cta.label}
+                  </Link>
+                )}
+              </motion.div>
+            ) : null
+          )}
+        </AnimatePresence>
       </section>
 
       {/* Text below hero with Social Media Icons */}
       <div className="relative mt-4 md:mt-6 px-4 md:px-16 lg:px-24">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 md:gap-4">
-          {/* Social Media Icons - Left side */}
           <div className="flex gap-3 md:gap-4">
             {socialMedia.map((social, index) => (
               <motion.a
@@ -973,12 +956,10 @@ export default function HomeClient({ logoUrl, posters }) {
             ))}
           </div>
 
-          {/* Heading - Center */}
           <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-yellow-700 text-center mt-2 md:mt-0">
             Your Hub for Premium Events
           </h2>
 
-          {/* Empty div for balance on larger screens */}
           <div className="hidden md:block w-24"></div>
         </div>
       </div>
@@ -988,7 +969,6 @@ export default function HomeClient({ logoUrl, posters }) {
         {/* Mobile Sidebar - HIDDEN ON MOBILE, SHOWN ON DESKTOP */}
         <aside className="hidden md:block md:col-span-3">
           <div className="sticky top-24 space-y-4">
-            {/* Events Mall */}
             <motion.button
               whileHover={{ scale: 1.05 }}
               onClick={handleEventMall}
@@ -997,7 +977,6 @@ export default function HomeClient({ logoUrl, posters }) {
               Events Mall
             </motion.button>
 
-            {/* Dashboard Button */}
             <motion.button
               whileHover={{ scale: 1.05 }}
               onClick={handleDashboardClick}
@@ -1006,7 +985,6 @@ export default function HomeClient({ logoUrl, posters }) {
               Dashboard
             </motion.button>
 
-            {/* All Event Button */}
             <motion.button
               whileHover={{ scale: 1.05 }}
               onClick={() => router.push("/events")}
@@ -1015,11 +993,11 @@ export default function HomeClient({ logoUrl, posters }) {
               All Event
             </motion.button>
 
-            {/* Poster Display */}
+            {/* Poster Display - FIXED: Added proper positioning for fill images */}
             {posters.length > 0 && (
               <div className="mt-0">
                 <h3 className="text-white font-semibold mb-2 text-sm">Featured Poster</h3>
-                <div className="w-full aspect-[4/8] rounded-xl overflow-hidden shadow-xl bg-gray-900 flex items-center justify-center relative">
+                <div className="w-full aspect-[4/8] rounded-xl overflow-hidden shadow-xl bg-gray-900 relative"> {/* FIXED: Added relative */}
                   {posters.map((poster, idx) => {
                     if (idx !== currentPoster) return null;
                     const isVideo = poster.url.endsWith(".mp4");
@@ -1033,21 +1011,27 @@ export default function HomeClient({ logoUrl, posters }) {
                       >
                         {isVideo ? (
                           <video
-                            src={poster.url}
+                            src={getCacheBustedUrl(poster.url)}
                             autoPlay
                             muted
                             playsInline
                             className="w-full h-full object-cover"
                             onEnded={() => setCurrentPoster((prev) => (prev + 1) % posters.length)}
+                            onError={(e) => {
+                              console.error('Poster video failed to load:', poster.url);
+                              setCurrentPoster((prev) => (prev + 1) % posters.length);
+                            }}
                           />
                         ) : (
-                          <Image
-                            src={poster.url}
-                            alt={poster.name}
-                            fill
-                            className="object-cover"
-                            unoptimized
-                          />
+                          <div className="relative w-full h-full"> {/* FIXED: Added relative container */}
+                            <Image
+                              src={poster.url}
+                              alt={poster.name}
+                              fill
+                              className="object-cover"
+                              unoptimized
+                            />
+                          </div>
                         )}
                       </a>
                     );
@@ -1079,7 +1063,7 @@ export default function HomeClient({ logoUrl, posters }) {
             </div>
           </div>
 
-          {/* Top Events Section */}
+          {/* Top Events Section - FIXED: All images have proper positioning */}
           <section className="mt-8 md:mt-10">
             <h2 className="text-xl md:text-2xl lg:text-3xl font-bold mb-4 md:mb-6 text-yellow-800">
               Top Events
@@ -1103,7 +1087,7 @@ export default function HomeClient({ logoUrl, posters }) {
                     whileHover={{ scale: 1.03 }}
                     className="glass rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 border border-gray-200"
                   >
-                    {/* Event Banner */}
+                    {/* Event Banner - FIXED: Added relative container */}
                     {event.thumbnail && (
                       <div className="relative h-32 md:h-40 lg:h-48 w-full">
                         <Image
@@ -1155,7 +1139,6 @@ export default function HomeClient({ logoUrl, posters }) {
                           </motion.button>
                         </Link>
                         
-                        {/* Event Type Tag */}
                         <span 
                           className="inline-block px-2 py-1 rounded-full text-xs font-semibold border"
                           style={{ 
@@ -1179,45 +1162,45 @@ export default function HomeClient({ logoUrl, posters }) {
             )}
           </section>
 
-          {/* ADDED: Features Section */}
-<section className="mt-12 md:mt-16">
-  <div className="text-center mb-6 md:mb-12">
-    <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-yellow-800 mb-3 md:mb-4">
-      Powerful Event Features
-    </h2>
-    <p className="text-sm md:text-base lg:text-lg text-gray-600 max-w-2xl mx-auto px-4">
-      Everything you need to create outstanding event experiences, all in one platform
-    </p>
-  </div>
+          {/* Features Section */}
+          <section className="mt-12 md:mt-16">
+            <div className="text-center mb-6 md:mb-12">
+              <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-yellow-800 mb-3 md:mb-4">
+                Powerful Event Features
+              </h2>
+              <p className="text-sm md:text-base lg:text-lg text-gray-600 max-w-2xl mx-auto px-4">
+                Everything you need to create outstanding event experiences, all in one platform
+              </p>
+            </div>
 
-  <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6 lg:gap-8">
-    {features.map((feature, index) => {
-      const Icon = feature.icon;
-      return (
-        <motion.div
-          key={feature.title}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
-          whileHover={{ y: -5 }}
-          className="bg-white border border-gray-200 rounded-xl md:rounded-2xl p-3 md:p-6 shadow-lg hover:shadow-xl transition-all duration-300 group"
-        >
-          <div className="w-6 h-6 md:w-10 md:h-10 lg:w-12 lg:h-12 bg-yellow-500 rounded-lg md:rounded-xl flex items-center justify-center mb-2 md:mb-3 lg:mb-4 group-hover:scale-110 transition-transform duration-300">
-            <Icon className="w-3 h-3 md:w-5 md:h-5 lg:w-6 lg:h-6 text-white" />
-          </div>
-          <h3 className="text-sm md:text-lg lg:text-xl font-bold text-gray-900 mb-1 md:mb-3">
-            {feature.title}
-          </h3>
-          <p className="text-xs md:text-sm lg:text-base text-gray-600 leading-relaxed">
-            {feature.description}
-          </p>
-        </motion.div>
-      );
-    })}
-  </div>
-</section>
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6 lg:gap-8">
+              {features.map((feature, index) => {
+                const Icon = feature.icon;
+                return (
+                  <motion.div
+                    key={feature.title}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    whileHover={{ y: -5 }}
+                    className="bg-white border border-gray-200 rounded-xl md:rounded-2xl p-3 md:p-6 shadow-lg hover:shadow-xl transition-all duration-300 group"
+                  >
+                    <div className="w-6 h-6 md:w-10 md:h-10 lg:w-12 lg:h-12 bg-yellow-500 rounded-lg md:rounded-xl flex items-center justify-center mb-2 md:mb-3 lg:mb-4 group-hover:scale-110 transition-transform duration-300">
+                      <Icon className="w-3 h-3 md:w-5 md:h-5 lg:w-6 lg:h-6 text-white" />
+                    </div>
+                    <h3 className="text-sm md:text-lg lg:text-xl font-bold text-gray-900 mb-1 md:mb-3">
+                      {feature.title}
+                    </h3>
+                    <p className="text-xs md:text-sm lg:text-base text-gray-600 leading-relaxed">
+                      {feature.description}
+                    </p>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </section>
 
-          {/* Testimonials */}
+          {/* Testimonials - FIXED: All avatar images have proper positioning */}
           <section className="mt-12 md:mt-16">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 md:mb-8 gap-3">
               <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-yellow-800">
@@ -1254,14 +1237,15 @@ export default function HomeClient({ logoUrl, posters }) {
                     </p>
                     <div className="flex items-center gap-2 md:gap-3 mt-auto">
                       {testimonial.avatar_url ? (
-                        <Image
-                          src={testimonial.avatar_url}
-                          alt={testimonial.name}
-                          width={32}
-                          height={32}
-                          className="rounded-full object-cover w-8 h-8 md:w-10 md:h-10"
-                          unoptimized
-                        />
+                        <div className="relative w-8 h-8 md:w-10 md:h-10">
+                          <Image
+                            src={testimonial.avatar_url}
+                            alt={testimonial.name}
+                            fill
+                            className="rounded-full object-cover"
+                            unoptimized
+                          />
+                        </div>
                       ) : (
                         <UserCircle size={32} className="text-gray-400 w-8 h-8 md:w-10 md:h-10" />
                       )}
@@ -1294,7 +1278,7 @@ export default function HomeClient({ logoUrl, posters }) {
         </main>
       </div>
 
-      {/* MOBILE BOTTOM NAVIGATION - ADDED FOR MOBILE USERS */}
+      {/* MOBILE BOTTOM NAVIGATION */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-4 z-40">
         <div className="flex justify-around items-center">
           <motion.button

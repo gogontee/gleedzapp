@@ -3,9 +3,8 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request) {
   try {
-    const { email, amount, reference, metadata, callback_url } = await request.json();
+    const { email, amount, reference, metadata, event_id, candidate_id } = await request.json();
 
-    // Use the correct environment variable (without NEXT_PUBLIC_)
     const secretKey = process.env.PAYSTACK_SECRET_KEY;
     console.log('Paystack Secret Key loaded:', !!secretKey);
     
@@ -17,7 +16,6 @@ export async function POST(request) {
       );
     }
 
-    // Validate the key format
     if (!secretKey.startsWith('sk_test_') && !secretKey.startsWith('sk_live_')) {
       console.error('Invalid Paystack secret key format');
       return NextResponse.json(
@@ -25,6 +23,12 @@ export async function POST(request) {
         { status: 500 }
       );
     }
+
+    // Build callback URL with event_id and candidate_id
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const callbackUrl = `${baseUrl}/payment/process?reference=${reference}&event_id=${event_id}&candidate_id=${candidate_id}`;
+    
+    console.log('Callback URL with params:', callbackUrl);
 
     const response = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',
@@ -34,10 +38,14 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         email,
-        amount: amount * 100, // Convert to kobo
+        amount: amount * 100,
         reference,
-        callback_url,
-        metadata
+        callback_url: callbackUrl,
+        metadata: {
+          ...metadata,
+          event_id,
+          candidate_id
+        }
       }),
     });
 

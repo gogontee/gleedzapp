@@ -21,19 +21,19 @@ const paymentMethods = [
   { 
     label: "Wallet", 
     id: "wallet", 
-    image: "/gtoken.png",
+    image: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/gtoken.png",
     alt: "GToken Wallet"
   },
   { 
     label: "Pay with Card", 
     id: "global_payment", 
-    image: "/visamastercard.jpg",
+    image: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/visamastercard.jpg",
     alt: "Visa Mastercard"
   },
   { 
     label: "Paystack", 
     id: "paystack", 
-    image: "/nairaa.png",
+    image: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/paystack.png",
     alt: "Naira Payment"
   },
 ];
@@ -400,7 +400,8 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
         >
           {/* Background Image */}
           <div className="absolute inset-0 opacity-20">
-            <Image src="/gleedzbg3.jpg" alt="Vote background" fill className="object-cover" unoptimized />
+            <Image src="https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/gleedz022.jpg" 
+            alt="Vote background" fill className="object-cover" unoptimized />
           </div>
 
           {/* Header - Fixed */}
@@ -471,8 +472,8 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
                                   <Image
                                     src={
                                       selectedPaymentMethod === "global_payment" 
-                                        ? "/visamastercard.jpg"
-                                        : "/nairaa.png"
+                                        ? "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/visamastercard.jpg"
+                                        : "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/paystack.png"
                                     }
                                     alt={selectedPaymentMethod === "global_payment" ? "Pay with Card" : "Naira Payment"}
                                     fill

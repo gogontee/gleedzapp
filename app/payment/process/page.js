@@ -1,3 +1,4 @@
+// app/payment/process/page.js
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -12,6 +13,14 @@ export default function PaymentVerification() {
     const verifyPayment = async () => {
       try {
         const reference = searchParams.get('reference');
+        const eventId = searchParams.get('event_id');
+        const candidateId = searchParams.get('candidate_id');
+
+        console.log('Payment verification params:', {
+          reference,
+          eventId,
+          candidateId
+        });
 
         if (!reference) {
           setStatus('error');
@@ -19,7 +28,7 @@ export default function PaymentVerification() {
           return;
         }
 
-        // Use API route for verification - this will handle everything
+        // Use API route for verification
         const verificationResponse = await fetch('/api/vote/verify', {
           method: 'POST',
           headers: {
@@ -27,11 +36,12 @@ export default function PaymentVerification() {
           },
           body: JSON.stringify({ 
             reference,
-            action: 'complete_payment' // Add this flag
+            action: 'complete_payment'
           })
         });
 
         const result = await verificationResponse.json();
+        console.log('Verification result:', result);
 
         if (!verificationResponse.ok) {
           throw new Error(result.error || 'Payment verification failed');
@@ -41,13 +51,31 @@ export default function PaymentVerification() {
           setStatus('success');
           setMessage(result.message || 'Payment successful! Your votes have been counted.');
 
+          // Determine redirect URL
+          let redirectUrl = '/';
+          
+          // Priority 1: Use transaction data from API
+          if (result.transaction?.event_id && result.transaction?.candidate_id) {
+            redirectUrl = `/myevent/${result.transaction.event_id}/candidate/${result.transaction.candidate_id}`;
+          } 
+          // Priority 2: Use URL parameters as fallback
+          else if (eventId && candidateId) {
+            redirectUrl = `/myevent/${eventId}/candidate/${candidateId}`;
+          }
+          // Priority 3: Use sessionStorage as last resort
+          else {
+            const storedEventId = sessionStorage.getItem('last_event_id');
+            const storedCandidateId = sessionStorage.getItem('last_candidate_id');
+            if (storedEventId && storedCandidateId) {
+              redirectUrl = `/myevent/${storedEventId}/candidate/${storedCandidateId}`;
+            }
+          }
+
+          console.log('Redirecting to:', redirectUrl);
+
           // Redirect to candidate page after 3 seconds
           setTimeout(() => {
-            if (result.transaction?.event_id && result.transaction?.candidate_id) {
-              window.location.href = `/myevent/${result.transaction.event_id}/candidate/${result.transaction.candidate_id}`;
-            } else {
-              window.location.href = '/'; // Fallback redirect
-            }
+            window.location.href = redirectUrl;
           }, 3000);
 
         } else {
@@ -58,7 +86,7 @@ export default function PaymentVerification() {
       } catch (error) {
         console.error('Payment verification error:', error);
         setStatus('error');
-        setMessage('An error occurred while verifying your payment.');
+        setMessage('An error occurred while verifying your payment. Please contact support if the problem persists.');
       }
     };
 
@@ -85,7 +113,7 @@ export default function PaymentVerification() {
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">Payment Successful!</h2>
             <p className="text-gray-600">{message}</p>
-            <p className="text-sm text-gray-500 mt-4">Redirecting you back...</p>
+            <p className="text-sm text-gray-500 mt-4">Redirecting you back to the candidate page...</p>
           </>
         )}
         

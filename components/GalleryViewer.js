@@ -1,9 +1,10 @@
-import { motion, useState, useRef } from "framer-motion";
+import { useState, useRef } from "react"; // Import from React
+import { motion } from "framer-motion"; // Only motion from framer-motion
 import Image from "next/image";
 import { ChevronLeft, X, User, Share2, Bookmark, MoreHorizontal, MessageCircle } from "lucide-react";
 
 export default function GalleryViewer({ gallery, currentIndex, onClose, pageColor, candidate }) {
-  const [currentImageIndex, setCurrentImageIndex] = useState(currentIndex);
+  const [currentImageIndex, setCurrentImageIndex] = useState(currentIndex || 0); // Add fallback for undefined
   const containerRef = useRef(null);
 
   const handleShare = async (item) => {

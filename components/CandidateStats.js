@@ -31,17 +31,17 @@ export default function CandidateStats({ candidate, event, session, pageColor, o
   return (
     <div className="relative bg-white rounded-2xl shadow-lg p-4 border border-gray-100 overflow-hidden">
       {/* Background Image with reduced opacity */}
-      <div className="absolute inset-0 opacity-30">
-        <img
-          src="/gleedzbg2.jpg"
-          alt="Stats background"
-          className="w-full h-full object-cover"
-        />
-      </div>
+      <div className="absolute inset-0 opacity-85">
+  <img
+    src="https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/gleedz055.jpg"
+    alt="Stats background"
+    className="w-full h-full object-cover"
+  />
+</div>
       
       {/* Content */}
       <div className="relative z-10">
-        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
           <Award className="w-4 h-4" style={{ color: pageColor }} />
           Candidate Stats
         </h3>
@@ -116,8 +116,8 @@ export default function CandidateStats({ candidate, event, session, pageColor, o
             onClick={onGiftClick}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="flex-1 flex items-center justify-center gap-2 py-2 font-semibold rounded-xl border transition-all duration-300 text-xs"
-            style={{ borderColor: pageColor, color: pageColor, backgroundColor: `${pageColor}08` }}
+            className="flex-1 flex items-center justify-center gap-2 py-2 text-white font-semibold rounded-xl border transition-all duration-300 text-xs"
+            style={{ borderColor: pageColor, backgroundColor: `${pageColor}08` }}
           >
             <Gift className="w-3 h-3" />
             Send Gift

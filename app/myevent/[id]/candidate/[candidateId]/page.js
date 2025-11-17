@@ -222,11 +222,9 @@ export default function CandidateDetailPage() {
                     </div>
                   )}
                 </div>
+                </div>
 
-                {/* Online Status Badge */}
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 md:w-9 md:h-9 bg-green-500 border-2 border-white rounded-full shadow-lg"></div>
-              </div>
-
+                
               {/* Candidate Nickname - Beside Photo */}
               {candidate.nick_name && (
                 <div className="backdrop-blur-x50 rounded-2xl px-4 md:px-6 py-2 md:py-3 border border-white/20 shadow-2xl w-[14ch] md:w-[18ch] overflow-hidden truncate">
