@@ -25,7 +25,7 @@ export default function CandidateGallery({ gallery, pageColor, onMediaClick }) {
         
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <Camera className="w-4 h-4" style={{ color: pageColor }} />
               Photo Gallery
             </h3>
@@ -34,9 +34,9 @@ export default function CandidateGallery({ gallery, pageColor, onMediaClick }) {
             </span>
           </div>
           
-          <div className="text-center py-12 text-gray-500">
-            <div className="w-16 h-16 mx-auto mb-3 rounded-2xl flex items-center justify-center bg-gray-100">
-              <Camera className="w-6 h-6 opacity-50" />
+          <div className="text-center py-12 text-white">
+            <div className="w-16 h-16 mx-auto mb-3 rounded-2xl flex items-center justify-center bg-gray-300">
+              <Camera className="w-6 h-6 opacity-100" />
             </div>
             <p className="text-sm">No gallery items yet</p>
             <p className="text-xs mt-1">Check back later for updates</p>

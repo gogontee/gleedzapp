@@ -47,9 +47,14 @@ export default function PaymentVerification() {
           throw new Error(result.error || 'Payment verification failed');
         }
 
-        if (result.success) {
-          setStatus('success');
-          setMessage(result.message || 'Payment successful! Your votes have been counted.');
+        // In your payment/process/page.js, after verification
+if (result.success) {
+  setStatus('success');
+  const statusMessage = result.status === 'complete' 
+    ? 'Payment successful! Your votes have been counted.' 
+    : 'Payment verified! Processing your votes...';
+  setMessage(statusMessage);
+ 
 
           // Determine redirect URL
           let redirectUrl = '/';

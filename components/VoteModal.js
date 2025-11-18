@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { Vote } from "lucide-react";
+import { Vote, Hand } from "lucide-react";
 import CustomAlert from "./CustomAlert";
 import { supabase } from "../lib/supabaseClient";
 
@@ -47,9 +47,23 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
   const [alertData, setAlertData] = useState({ title: '', message: '', type: 'info' });
   const [userCountry, setUserCountry] = useState("NG");
   const [userEmail, setUserEmail] = useState("");
+  const [showHandPointer, setShowHandPointer] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const tokenPerPoint = 1;
   const tokenCost = selectedPoints ? selectedPoints.cost : 0;
+
+  useEffect(() => {
+    // Check if mobile device
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -79,6 +93,20 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
       fetchUserData();
     }
   }, [session]);
+
+  useEffect(() => {
+    // Show hand pointer on mobile when points are selected
+    if (isMobile && selectedPoints && !selectedPaymentMethod) {
+      setShowHandPointer(true);
+      // Auto-hide after 5 seconds
+      const timer = setTimeout(() => {
+        setShowHandPointer(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowHandPointer(false);
+    }
+  }, [selectedPoints, selectedPaymentMethod, isMobile]);
 
   const getDisplayPrice = () => {
     if (!selectedPoints) return null;
@@ -116,6 +144,15 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
 
   const handleSelectPoints = (option) => {
     setSelectedPoints(option);
+    // On mobile, scroll to payment section after selecting points
+    if (isMobile) {
+      setTimeout(() => {
+        const paymentSection = document.getElementById('payment-section-mobile');
+        if (paymentSection) {
+          paymentSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 300);
+    }
   };
 
   const handleShowCustomAlert = (title, message, type = "info") => {
@@ -405,18 +442,18 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
           </div>
 
           {/* Header - Fixed */}
-          <div className="relative z-10 p-6 border-b border-gray-700 bg-gray-900/80 backdrop-blur-sm">
+          <div className="relative z-10 p-4 lg:p-6 border-b border-gray-700 bg-gray-900/80 backdrop-blur-sm">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <Vote className="w-8 h-8" style={{ color: pageColor }} />
+              <div className="flex items-center space-x-3 lg:space-x-4">
+                <Vote className="w-6 h-6 lg:w-8 lg:h-8" style={{ color: pageColor }} />
                 <div>
-                  <h3 className="text-lg font-bold text-white">Vote for {candidate.full_name}</h3>
+                  <h3 className="text-base lg:text-lg font-bold text-white">Vote for {candidate.full_name}</h3>
                   <p className="text-xs text-gray-300 mt-1">Choose points to cast your vote</p>
                 </div>
               </div>
               
               {candidate.photo && (
-                <div className="w-16 h-16 rounded-2xl border-2 border-white overflow-hidden shadow-lg">
+                <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-2xl border-2 border-white overflow-hidden shadow-lg">
                   <Image
                     src={candidate.photo}
                     alt={candidate.full_name}
@@ -432,12 +469,12 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
 
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto">
-            <div className="relative z-10 p-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="relative z-10 p-4 lg:p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
                 {/* Left Column - Points Selection */}
                 <div className="lg:col-span-2">
-                  <h4 className="text-sm font-semibold mb-4 text-gray-300">Select Points</h4>
-                  <div className="grid grid-cols-3 gap-2">
+                  <h4 className="text-sm font-semibold mb-3 lg:mb-4 text-gray-300">Select Points</h4>
+                  <div className="grid grid-cols-3 gap-1.5 lg:gap-2">
                     {pointOptions.map((option) => {
                       const optionDisplayPrice = selectedPaymentMethod === "wallet" 
                         ? `${option.cost} token${option.cost !== 1 ? 's' : ''}`
@@ -451,7 +488,7 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={() => handleSelectPoints(option)}
-                          className={`p-3 rounded-xl border-2 transition-all duration-300 text-left ${
+                          className={`p-1.5 lg:p-3 rounded-lg border-2 transition-all duration-300 text-left ${
                             selectedPoints?.points === option.points
                               ? 'shadow-lg transform scale-105'
                               : 'border-gray-700 hover:border-gray-500 hover:shadow-md'
@@ -461,14 +498,16 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
                             backgroundColor: selectedPoints?.points === option.points ? `${pageColor}20` : 'rgba(255,255,255,0.05)'
                           }}
                         >
-                          <div className="space-y-1">
-                            <p className="text-xs font-semibold text-white leading-tight">{option.label}</p>
+                          <div className="space-y-0.5 lg:space-y-1">
+                            <p className="text-[10px] lg:text-xs font-semibold text-white leading-tight">
+                              {option.label}
+                            </p>
                             <div className="flex items-center justify-between">
-                              <p className="text-[10px] text-gray-400 leading-tight">
+                              <p className="text-[8px] lg:text-[10px] text-gray-400 leading-tight">
                                 {optionDisplayPrice}
                               </p>
                               {selectedPaymentMethod !== "wallet" && (
-                                <div className="w-4 h-4 flex-shrink-0 relative">
+                                <div className="w-2.5 h-2.5 lg:w-4 lg:h-4 flex-shrink-0 relative">
                                   <Image
                                     src={
                                       selectedPaymentMethod === "global_payment" 
@@ -489,12 +528,28 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
                     })}
                   </div>
 
+                  {/* Mobile Hand Pointer Animation */}
+                  {showHandPointer && isMobile && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="flex items-center justify-center mt-3 p-2 bg-blue-500/20 rounded-xl border border-blue-500/30"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Hand className="w-4 h-4 text-blue-400 animate-bounce" />
+                        <span className="text-xs text-blue-300 font-medium">Choose payment method below</span>
+                        <Hand className="w-4 h-4 text-blue-400 animate-bounce" style={{ animationDelay: '0.2s' }} />
+                      </div>
+                    </motion.div>
+                  )}
+
                   {/* Selected Points Summary */}
                   {selectedPoints && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-gray-800/50 rounded-xl p-4 border border-gray-700 mt-4"
+                      className="bg-gray-800/50 rounded-xl p-3 lg:p-4 border border-gray-700 mt-3 lg:mt-4"
                     >
                       <div className="flex justify-between items-center">
                         <div>
@@ -515,7 +570,7 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
                   )}
 
                   {/* Info Section */}
-                  <div className="bg-blue-900/20 rounded-xl p-4 border border-blue-700/30 mt-4">
+                  <div className="bg-blue-900/20 rounded-xl p-3 lg:p-4 border border-blue-700/30 mt-3 lg:mt-4">
                     <div className="flex items-start space-x-3">
                       <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center mt-0.5">
                         <span className="text-xs text-white">i</span>
@@ -540,16 +595,16 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
                 </div>
 
                 {/* Right Column - Payment Methods */}
-                <div className="lg:col-span-1">
-                  <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700 sticky top-4">
-                    <h4 className="text-sm font-semibold mb-4 text-gray-300">Payment Method</h4>
-                    <div className="space-y-3">
+                <div className="lg:col-span-1" id="payment-section-mobile">
+                  <div className="bg-gray-800/50 rounded-xl p-3 lg:p-4 border border-gray-700 lg:sticky lg:top-4">
+                    <h4 className="text-sm font-semibold mb-3 lg:mb-4 text-gray-300">Payment Method</h4>
+                    <div className="space-y-2 lg:space-y-3">
                       {paymentMethods.map((method) => (
                         <motion.label
                           key={method.id}
                           whileHover={{ scale: 1.02 }}
                           htmlFor={method.id}
-                          className={`flex items-center p-3 rounded-lg border-2 cursor-pointer transition-all duration-300 ${
+                          className={`flex items-center p-2 lg:p-3 rounded-lg border-2 cursor-pointer transition-all duration-300 ${
                             selectedPaymentMethod === method.id
                               ? 'border-blue-500 bg-blue-500/10'
                               : 'border-gray-600 hover:border-gray-400 bg-gray-700/50'
@@ -564,7 +619,7 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
                             onChange={() => setSelectedPaymentMethod(method.id)}
                             className="hidden"
                           />
-                          <div className="w-8 h-8 relative mr-3 flex-shrink-0">
+                          <div className="w-6 h-6 lg:w-8 lg:h-8 relative mr-2 lg:mr-3 flex-shrink-0">
                             <Image
                               src={method.image}
                               alt={method.alt}
@@ -573,7 +628,7 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
                               unoptimized
                             />
                           </div>
-                          <span className="text-sm text-white">
+                          <span className="text-xs lg:text-sm text-white">
                             {method.id === "global_payment" ? "Pay with Card" : method.label}
                           </span>
                         </motion.label>
@@ -581,7 +636,7 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
                     </div>
 
                     {/* Payment Method Info */}
-                    <div className="mt-4 p-3 bg-gray-700/30 rounded-lg">
+                    <div className="mt-3 lg:mt-4 p-2 lg:p-3 bg-gray-700/30 rounded-lg">
                       <p className="text-xs text-gray-300">
                         {selectedPaymentMethod === "wallet" && "Pay directly from your token wallet balance"}
                         {selectedPaymentMethod === "global_payment" && "Pay with international credit/debit cards (Coming Soon)"}
@@ -596,19 +651,19 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
           </div>
 
           {/* Fixed Footer with Action Buttons */}
-          <div className="relative z-10 p-6 lg:p-6 border-t border-gray-700 bg-gray-900/80 backdrop-blur-sm pb-8 lg:pb-6">
-            <div className="flex gap-3">
+          <div className="relative z-10 p-4 lg:p-6 border-t border-gray-700 bg-gray-900/80 backdrop-blur-sm pb-6 lg:pb-6">
+            <div className="flex gap-2 lg:gap-3">
               <button
                 onClick={onClose}
                 disabled={loading}
-                className="flex-1 px-6 py-3 bg-gray-700 rounded-xl text-sm font-semibold text-white hover:bg-gray-600 disabled:opacity-50 transition-all duration-300"
+                className="flex-1 px-4 lg:px-6 py-2 lg:py-3 bg-gray-700 rounded-xl text-sm font-semibold text-white hover:bg-gray-600 disabled:opacity-50 transition-all duration-300"
               >
                 Cancel
               </button>
               <button
                 onClick={handleVote}
                 disabled={!selectedPoints || loading}
-                className="flex-1 px-6 py-3 rounded-xl text-sm font-semibold text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 lg:px-6 py-2 lg:py-3 rounded-xl text-sm font-semibold text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ 
                   backgroundColor: !selectedPoints || loading ? '#6B7280' : pageColor,
                   opacity: !selectedPoints || loading ? 0.5 : 1
@@ -617,7 +672,7 @@ export default function VoteModal({ candidate, event, onClose, pageColor, sessio
                 {loading ? (
                   <div className="flex items-center justify-center gap-2">
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Processing...
+                    <span className="text-xs lg:text-sm">Processing...</span>
                   </div>
                 ) : (
                   `Vote with ${selectedPoints?.points?.toLocaleString()} Points`
