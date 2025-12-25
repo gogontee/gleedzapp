@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Wallet, PlusCircle, ArrowDownCircle, Coins, TrendingUp, Eye, EyeOff, History, CheckCircle, XCircle, Clock } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
+import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 
 // Dynamic import for Paystack to avoid SSR issues
 const loadPaystack = () => {
@@ -13,7 +14,23 @@ const loadPaystack = () => {
   return Promise.resolve(() => {});
 };
 
+// Main component wrapper with PayPal provider
 export default function WalletComponent() {
+  return (
+    <PayPalScriptProvider 
+      options={{ 
+        "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID,
+        currency: "USD",
+        intent: "capture"
+      }}
+    >
+      <WalletContent />
+    </PayPalScriptProvider>
+  );
+}
+
+// Inner component with all the existing logic
+function WalletContent() {
   const [fundOpen, setFundOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [tokenAmount, setTokenAmount] = useState(0);
@@ -354,6 +371,11 @@ export default function WalletComponent() {
   const updateWalletBalance = async (tokensToAdd, reference = null) => {
     if (!userId) return;
 
+    const isPaypal = reference && reference.startsWith('PAYPAL_');
+    const actionDescription = isPaypal 
+      ? `top up from paypal - ${tokensToAdd} tokens - Ref: ${reference}`
+      : `top up from paystack - ${tokensToAdd} tokens - Ref: ${reference || 'N/A'}`;
+
     try {
       // Get current balance
       const { data: currentWallet, error: fetchError } = await supabase
@@ -370,7 +392,7 @@ export default function WalletComponent() {
           .insert({ 
             user_id: userId, 
             balance: tokensToAdd,
-            last_action: `top up from paystack - ${tokensToAdd} tokens - Ref: ${reference || 'N/A'}`,
+            last_action: actionDescription,
             updated_at: new Date().toISOString()
           })
           .select()
@@ -381,7 +403,7 @@ export default function WalletComponent() {
           return;
         }
         setBalance(newWallet.balance);
-        console.log("Wallet created with last_action: top up from paystack");
+        console.log("Wallet created with last_action:", actionDescription);
       } else {
         // Update existing wallet
         const currentBalance = currentWallet?.balance || 0;
@@ -391,7 +413,7 @@ export default function WalletComponent() {
           .from("token_wallets")
           .update({ 
             balance: newBalance,
-            last_action: `top up from paystack - ${tokensToAdd} tokens - Ref: ${reference || 'N/A'}`,
+            last_action: actionDescription,
             updated_at: new Date().toISOString()
           })
           .eq("user_id", userId);
@@ -400,7 +422,7 @@ export default function WalletComponent() {
           console.error("Error updating wallet balance:", updateError);
         } else {
           setBalance(newBalance);
-          console.log("Wallet balance updated successfully with last_action: top up from paystack");
+          console.log("Wallet balance updated successfully with last_action:", actionDescription);
         }
       }
     } catch (error) {
@@ -409,8 +431,10 @@ export default function WalletComponent() {
   };
 
   // Store transaction with correct conversion
-  const verifyTransaction = async (reference) => {
+  const verifyTransaction = async (reference, isPaypal = false) => {
     try {
+      const description = isPaypal ? "top up from paypal" : "top up from paystack";
+      
       const { error } = await supabase
         .from("transactions")
         .insert({
@@ -420,17 +444,38 @@ export default function WalletComponent() {
           naira_amount: tokenAmount * 1000,
           status: "completed",
           type: "deposit",
-          description: "top up from paystack",
+          description: description,
           created_at: new Date().toISOString()
         });
 
       if (error) {
         console.error("Error storing transaction:", error);
       } else {
-        console.log("Transaction recorded successfully with description: top up from paystack");
+        console.log("Transaction recorded successfully with description:", description);
       }
     } catch (error) {
       console.error("Error verifying transaction:", error);
+    }
+  };
+
+  // Handle PayPal payment success
+  const handlePayPalSuccess = async (details) => {
+    try {
+      console.log("PayPal payment successful:", details);
+      
+      // Update wallet balance in Supabase
+      await updateWalletBalance(tokenAmount, `PAYPAL_${details.id}`);
+      
+      // Store transaction record
+      await verifyTransaction(`PAYPAL_${details.id}`, true);
+      
+      alert(`Payment successful! ${tokenAmount} tokens added to your wallet.`);
+      setTokenAmount(0);
+      setFundOpen(false);
+      
+    } catch (error) {
+      console.error("PayPal payment error:", error);
+      alert("Payment processing failed. Please try again.");
     }
   };
 
@@ -681,6 +726,7 @@ export default function WalletComponent() {
               )}
             </div>
             
+            {/* Paystack Payment Button */}
             <button 
               onClick={handleProceedToPay}
               disabled={paystackLoading || !usePaystackPayment || tokenAmount < 1}
@@ -698,9 +744,64 @@ export default function WalletComponent() {
                 </>
               )}
             </button>
+
+            {/* PayPal Payment Button */}
+            {tokenAmount > 0 && (
+              <div className="mt-4">
+                <div className="relative flex items-center py-2">
+                  <div className="flex-grow border-t border-gray-300"></div>
+                  <span className="flex-shrink mx-4 text-xs text-gray-500">OR</span>
+                  <div className="flex-grow border-t border-gray-300"></div>
+                </div>
+                <PayPalButtons
+                  style={{ 
+                    layout: "vertical",
+                    color: "blue",
+                    shape: "rect",
+                    label: "paypal"
+                  }}
+                  createOrder={(data, actions) => {
+                    // Calculate amount in USD based on token amount
+                    const usdAmount = tokenToDollar(tokenAmount);
+                    if (usdAmount < 0.01) {
+                      alert("Minimum PayPal payment is $0.01 USD");
+                      return Promise.reject("Amount too small");
+                    }
+                    return actions.order.create({
+                      purchase_units: [
+                        {
+                          amount: {
+                            value: usdAmount.toFixed(2), // PayPal expects string with 2 decimal places
+                            currency_code: "USD"
+                          },
+                          description: `Wallet funding for ${tokenAmount} tokens`
+                        },
+                      ],
+                    });
+                  }}
+                  onApprove={async (data, actions) => {
+                    try {
+                      const details = await actions.order.capture();
+                      await handlePayPalSuccess(details);
+                    } catch (error) {
+                      console.error("PayPal payment error:", error);
+                      alert("Payment processing failed. Please try again.");
+                    }
+                  }}
+                  onError={(error) => {
+                    console.error("PayPal Button Error:", error);
+                    alert("An error occurred with PayPal. Please try another method.");
+                  }}
+                  onCancel={() => {
+                    console.log("PayPal payment cancelled");
+                    alert("PayPal payment was cancelled.");
+                  }}
+                />
+              </div>
+            )}
             
             <p className="text-xs text-gray-500 text-center">
-              Payments processed securely via Paystack
+              Payments processed securely via Paystack & PayPal
             </p>
           </div>
         </div>

@@ -105,7 +105,7 @@ export default function MyEvents({ onCreateEvent }) {
           You haven't created any events yet.
         </p>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
           {events.map((event) => {
             const banner = event.thumbnail;
             const fallbackBanner = "https://placehold.co/600x300?text=No+Thumbnail";
@@ -173,8 +173,11 @@ export default function MyEvents({ onCreateEvent }) {
                         <Eye size={18} />
                       </Link>
 
-                      {/* Launch Button */}
-                      <button title="Launch" className="hover:text-green-600 transition">
+                      {/* Launch Button - Green when launched, black when draft */}
+                      <button 
+                        title="Launch" 
+                        className={`transition ${event.launch ? 'text-green-600 hover:text-green-700' : 'text-gray-600 hover:text-gray-800'}`}
+                      >
                         <Rocket size={18} />
                       </button>
                     </div>

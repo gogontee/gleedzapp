@@ -202,26 +202,27 @@ const StatItemWithModal = ({ stat, index, onUpdate, onRemove }) => {
 
 export default function EventEditPanel({ event, onClose, onSave, onDelete }) {
   const [formData, setFormData] = useState({
-    name: "",
-    slug: "",
-    description: "",
-    logo: "",
-    type: "",
-    page_color: "#D4AF37",
-    thumbnail: "",
-    tagline: "",
-    launch: false,
-    code: "",
-    hero_sections: [],
-    stats: [],
-    group_banner1: [],
-    group_banner2: [],
-    group_poster1: [],
-    activities: [],
-    main_gallery: [],
-    news: [],
-    tickets: []
-  });
+  name: "",
+  slug: "",
+  description: "",
+  logo: "",
+  type: "",
+  page_color: "#D4AF37",
+  thumbnail: "",
+  tagline: "",
+  launch: false,
+  code: "",
+  hero_sections: [],
+  mobile_hero: [], // ADD THIS LINE
+  stats: [],
+  group_banner1: [],
+  group_banner2: [],
+  group_poster1: [],
+  activities: [],
+  main_gallery: [],
+  news: [],
+  tickets: []
+});
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("basic");
@@ -240,31 +241,32 @@ export default function EventEditPanel({ event, onClose, onSave, onDelete }) {
 
   // Initialize form with event data
   useEffect(() => {
-    if (event) {
-      setFormData({
-        name: event.name || "",
-        slug: event.slug || "",
-        description: event.description || "",
-        logo: event.logo || "",
-        type: event.type || "",
-        page_color: event.page_color || "#D4AF37",
-        thumbnail: event.thumbnail || "",
-        tagline: event.tagline || "",
-        launch: event.launch || false,
-        code: event.code || "",
-        hero_sections: event.hero_sections || [],
-        stats: event.stats || [],
-        group_banner1: event.group_banner1 || [],
-        group_banner2: event.group_banner2 || [],
-        group_poster1: event.group_poster1 || [],
-        activities: event.activities || [],
-        main_gallery: event.main_gallery || [],
-        news: event.news || [],
-        tickets: event.tickets || []
-      });
-      fetchCandidates();
-    }
-  }, [event]);
+  if (event) {
+    setFormData({
+      name: event.name || "",
+      slug: event.slug || "",
+      description: event.description || "",
+      logo: event.logo || "",
+      type: event.type || "",
+      page_color: event.page_color || "#D4AF37",
+      thumbnail: event.thumbnail || "",
+      tagline: event.tagline || "",
+      launch: event.launch || false,
+      code: event.code || "",
+      hero_sections: event.hero_sections || [],
+      mobile_hero: event.mobile_hero || [], // ADD THIS LINE
+      stats: event.stats || [],
+      group_banner1: event.group_banner1 || [],
+      group_banner2: event.group_banner2 || [],
+      group_poster1: event.group_poster1 || [],
+      activities: event.activities || [],
+      main_gallery: event.main_gallery || [],
+      news: event.news || [],
+      tickets: event.tickets || []
+    });
+    fetchCandidates();
+  }
+}, [event]);
 
   // Fetch candidates from candidates table
   const fetchCandidates = async () => {
@@ -393,36 +395,36 @@ export default function EventEditPanel({ event, onClose, onSave, onDelete }) {
   };
 
   const handleImageSelect = async (field, isArrayField = false, index = null, customField = null) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*,video/*';
-    
-    input.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*,video/*';
+  
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-      const publicUrl = await handleFileUpload(file, customField || field);
-      if (publicUrl) {
-        if (isArrayField && index !== null) {
-          if (customField) {
-            handleArrayFieldChange(field, index, { 
-              ...(formData[field]?.[index] || {}), 
-              [customField]: publicUrl 
-            });
-          } else {
-            handleArrayFieldChange(field, index, { 
-              ...(formData[field]?.[index] || {}), 
-              src: publicUrl 
-            });
-          }
+    const publicUrl = await handleFileUpload(file, customField || field);
+    if (publicUrl) {
+      if (isArrayField && index !== null) {
+        if (customField) {
+          handleArrayFieldChange(field, index, { 
+            ...(formData[field]?.[index] || {}), 
+            [customField]: publicUrl 
+          });
         } else {
-          handleInputChange(field, publicUrl);
+          handleArrayFieldChange(field, index, { 
+            ...(formData[field]?.[index] || {}), 
+            src: publicUrl 
+          });
         }
+      } else {
+        handleInputChange(field, publicUrl);
       }
-    };
-    
-    input.click();
+    }
   };
+  
+  input.click();
+};
 
   // Candidate Management Functions
 const addCandidate = () => {
@@ -1411,127 +1413,242 @@ const isVideoFile = (url) => {
 )}
 
             {activeTab === "content" && (
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-4 md:space-y-6"
-              >
-                
-
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Hero Sections
-                    </label>
-                    <button
-                      onClick={() => addArrayItem('hero_sections', { type: 'image', src: '', caption: '', cta: { label: '', href: '' } })}
-                      className="px-3 py-1 bg-yellow-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Hero Section
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    {getArrayField('hero_sections').map((section, index) => (
-                      <div key={index} className="p-4 border border-gray-200 rounded-lg">
-                        <div className="flex items-center gap-3 mb-3">
-                          <select
-                            value={section.type}
-                            onChange={(e) => handleArrayFieldChange('hero_sections', index, { ...section, type: e.target.value })}
-                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm md:text-base"
-                          >
-                            <option value="image">Image</option>
-                            <option value="video">Video</option>
-                          </select>
-                          
-                          <button
-                            type="button"
-                            onClick={() => handleImageSelect('hero_sections', true, index)}
-                            className="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
-                          >
-                            <ImageIcon className="w-4 h-4" />
-                            Choose File
-                          </button>
-                          
-                          {section.src && (
-  <div className="flex items-center gap-2">
-    {typeof section.src === 'string' && isVideoFile(section.src) ? (
-      <div className="relative">
-        <video className="w-12 h-12 object-cover rounded" muted>
-          <source src={section.src} type="video/mp4" />
-        </video>
-        <Play className="w-4 h-4 absolute inset-0 m-auto text-white" />
+  <motion.div
+    initial={{ opacity: 0, x: 20 }}
+    animate={{ opacity: 1, x: 0 }}
+    exit={{ opacity: 0, x: -20 }}
+    className="space-y-4 md:space-y-6"
+  >
+    {/* Desktop Hero Sections */}
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <label className="block text-sm font-medium text-gray-700">
+          Desktop Hero Sections
+        </label>
+        <button
+          onClick={() => addArrayItem('hero_sections', { type: 'image', src: '', caption: '', tagline: '', cta: { label: '', href: '' } })}
+          className="px-3 py-1 bg-yellow-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
+        >
+          <Plus className="w-4 h-4" />
+          Add Desktop Hero Section
+        </button>
       </div>
-    ) : (
-      <img src={typeof section.src === 'string' ? section.src : ''} alt="Preview" className="w-12 h-12 object-cover rounded" />
-    )}
-    <span className="text-sm text-gray-600 truncate max-w-32">
-      {typeof section.src === 'string' ? section.src.split('/').pop() : 'Invalid URL'}
-    </span>
-  </div>
-)}
-                          
-                          <button
-                            onClick={() => removeArrayItem('hero_sections', index)}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                          >
-                            <Minus className="w-4 h-4" />
-                          </button>
-                        </div>
-                        
-                        <input
-                          type="text"
-                          value={section.caption}
-                          onChange={(e) => handleArrayFieldChange('hero_sections', index, { ...section, caption: e.target.value })}
-                          placeholder="Caption text"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2 text-sm md:text-base"
-                        />
+      
+      <div className="space-y-4">
+        {getArrayField('hero_sections').map((section, index) => (
+          <div key={index} className="p-4 border border-gray-200 rounded-lg">
+            <div className="flex items-center gap-3 mb-3">
+              <select
+                value={section.type}
+                onChange={(e) => handleArrayFieldChange('hero_sections', index, { ...section, type: e.target.value })}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm md:text-base"
+              >
+                <option value="image">Image</option>
+                <option value="video">Video</option>
+              </select>
+              
+              <button
+                type="button"
+                onClick={() => handleImageSelect('hero_sections', true, index)}
+                className="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
+              >
+                <ImageIcon className="w-4 h-4" />
+                Choose File
+              </button>
+              
+              {section.src && (
+                <div className="flex items-center gap-2">
+                  {typeof section.src === 'string' && isVideoFile(section.src) ? (
+                    <div className="relative">
+                      <video className="w-12 h-12 object-cover rounded" muted>
+                        <source src={section.src} type="video/mp4" />
+                      </video>
+                      <Play className="w-4 h-4 absolute inset-0 m-auto text-white" />
+                    </div>
+                  ) : (
+                    <img src={typeof section.src === 'string' ? section.src : ''} alt="Preview" className="w-12 h-12 object-cover rounded" />
+                  )}
+                  <span className="text-sm text-gray-600 truncate max-w-32">
+                    {typeof section.src === 'string' ? section.src.split('/').pop() : 'Invalid URL'}
+                  </span>
+                </div>
+              )}
+              
+              <button
+                onClick={() => removeArrayItem('hero_sections', index)}
+                className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <input
+              type="text"
+              value={section.caption}
+              onChange={(e) => handleArrayFieldChange('hero_sections', index, { ...section, caption: e.target.value })}
+              placeholder="Caption text"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2 text-sm md:text-base"
+            />
 
-                        {/* HERO TAGLINE FIELD ADDED HERE */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Hero Tagline
-                  </label>
-                  <input
-                    type="text"
-                    value={section.tagline}
-                    onChange={(e) => handleArrayFieldChange('hero_sections', index, { ...section, tagline: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent text-sm md:text-base"
-                    placeholder="Enter a compelling tagline for this hero if you want"
-                  />
-                
+            {/* Hero Tagline Field */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Hero Tagline
+              </label>
+              <input
+                type="text"
+                value={section.tagline}
+                onChange={(e) => handleArrayFieldChange('hero_sections', index, { ...section, tagline: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent text-sm md:text-base"
+                placeholder="Enter a compelling tagline for this hero if you want"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+              <input
+                type="text"
+                value={section.cta?.label || ''}
+                onChange={(e) => handleArrayFieldChange('hero_sections', index, { 
+                  ...section, 
+                  cta: { ...section.cta, label: e.target.value } 
+                })}
+                placeholder="CTA Label"
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm md:text-base"
+              />
+              <input
+                type="text"
+                value={section.cta?.href || ''}
+                onChange={(e) => handleArrayFieldChange('hero_sections', index, { 
+                  ...section, 
+                  cta: { ...section.cta, href: e.target.value } 
+                })}
+                placeholder="CTA Link"
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm md:text-base"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Mobile Hero Sections - NEW SECTION */}
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <label className="block text-sm font-medium text-gray-700">
+          Mobile Hero Sections
+        </label>
+        <button
+          onClick={() => addArrayItem('mobile_hero', { type: 'image', src: '', caption: '', tagline: '', cta: { label: '', href: '' } })}
+          className="px-3 py-1 bg-yellow-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
+        >
+          <Plus className="w-4 h-4" />
+          Add Mobile Hero Section
+        </button>
+      </div>
+      
+      <div className="space-y-4">
+        {getArrayField('mobile_hero').map((section, index) => (
+          <div key={index} className="p-4 border border-gray-200 rounded-lg bg-blue-50">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-blue-700">
+                Mobile Hero {index + 1}
+              </span>
+              <button
+                onClick={() => removeArrayItem('mobile_hero', index)}
+                className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-3 mb-3">
+              <select
+                value={section.type}
+                onChange={(e) => handleArrayFieldChange('mobile_hero', index, { ...section, type: e.target.value })}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm md:text-base"
+              >
+                <option value="image">Image</option>
+                <option value="video">Video</option>
+              </select>
+              
+              <button
+                type="button"
+                onClick={() => handleImageSelect('mobile_hero', true, index)}
+                className="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium flex items-center gap-1"
+              >
+                <ImageIcon className="w-4 h-4" />
+                Choose File
+              </button>
+              
+              {section.src && (
+                <div className="flex items-center gap-2">
+                  {typeof section.src === 'string' && isVideoFile(section.src) ? (
+                    <div className="relative">
+                      <video className="w-12 h-12 object-cover rounded" muted>
+                        <source src={section.src} type="video/mp4" />
+                      </video>
+                      <Play className="w-4 h-4 absolute inset-0 m-auto text-white" />
+                    </div>
+                  ) : (
+                    <img src={typeof section.src === 'string' ? section.src : ''} alt="Preview" className="w-12 h-12 object-cover rounded" />
+                  )}
+                  <span className="text-sm text-gray-600 truncate max-w-32">
+                    {typeof section.src === 'string' ? section.src.split('/').pop() : 'Invalid URL'}
+                  </span>
                 </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          
-                          <input
-                            type="text"
-                            value={section.cta?.label || ''}
-                            onChange={(e) => handleArrayFieldChange('hero_sections', index, { 
-                              ...section, 
-                              cta: { ...section.cta, label: e.target.value } 
-                            })}
-                            placeholder="CTA Label"
-                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm md:text-base"
-                          />
-                          <input
-                            type="text"
-                            value={section.cta?.href || ''}
-                            onChange={(e) => handleArrayFieldChange('hero_sections', index, { 
-                              ...section, 
-                              cta: { ...section.cta, href: e.target.value } 
-                            })}
-                            placeholder="CTA Link"
-                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm md:text-base"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            )}
+              )}
+            </div>
+            
+            <input
+              type="text"
+              value={section.caption}
+              onChange={(e) => handleArrayFieldChange('mobile_hero', index, { ...section, caption: e.target.value })}
+              placeholder="Caption text"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2 text-sm md:text-base"
+            />
+
+            {/* Mobile Hero Tagline Field */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mobile Hero Tagline
+              </label>
+              <input
+                type="text"
+                value={section.tagline}
+                onChange={(e) => handleArrayFieldChange('mobile_hero', index, { ...section, tagline: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent text-sm md:text-base"
+                placeholder="Enter a compelling tagline for mobile hero"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+              <input
+                type="text"
+                value={section.cta?.label || ''}
+                onChange={(e) => handleArrayFieldChange('mobile_hero', index, { 
+                  ...section, 
+                  cta: { ...section.cta, label: e.target.value } 
+                })}
+                placeholder="CTA Label"
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm md:text-base"
+              />
+              <input
+                type="text"
+                value={section.cta?.href || ''}
+                onChange={(e) => handleArrayFieldChange('mobile_hero', index, { 
+                  ...section, 
+                  cta: { ...section.cta, href: e.target.value } 
+                })}
+                placeholder="CTA Link"
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm md:text-base"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </motion.div>
+)}
 
             {activeTab === "awards" && (
   <motion.div

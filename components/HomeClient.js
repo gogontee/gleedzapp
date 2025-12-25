@@ -1116,11 +1116,11 @@ export default function HomeClient({ logoUrl, posters }) {
                               />
                             </div>
                           )}
-                          <div>
-                            <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-1 line-clamp-1">
-                              {event.name}
-                            </h3>
-                          </div>
+                          <div className="flex-1 min-w-0">
+  <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-1 line-clamp-1 md:line-clamp-none md:whitespace-normal md:break-words">
+    {event.name}
+  </h3>
+</div>
                         </div>
                       </div>
 

@@ -19,8 +19,10 @@ import { supabase } from "../../lib/supabaseClient";
 import EventHeader from "../../components/EventHeader";
 
 export default function DefaultEventPage({ event }) {
-  // ---------- dynamic hero slides ----------
-  const heroSlides = event?.hero_sections || [];
+  // ---------- hero slides state ----------
+  const [mobileHeroSlides, setMobileHeroSlides] = useState([]);
+  const [desktopHeroSlides, setDesktopHeroSlides] = useState([]);
+  const [heroSlides, setHeroSlides] = useState([]);
 
   // ---------- dynamic stats ----------
   const stats = event?.stats || [];
@@ -52,38 +54,82 @@ export default function DefaultEventPage({ event }) {
   const heroTimerRef = useRef(null);
   const posterTimerRef = useRef(null);
   const sponsorsRef = useRef(null);
+  
   // Touch handlers for swipe functionality
-const [touchStart, setTouchStart] = useState(0);
-const [touchEnd, setTouchEnd] = useState(0);
+  const [touchStart, setTouchStart] = useState(0);
+  const [touchEnd, setTouchEnd] = useState(0);
 
-const handleTouchStart = (e) => {
-  setTouchStart(e.targetTouches[0].clientX);
-};
+  // ---------- fetch hero slides based on screen size ----------
+  useEffect(() => {
+    const fetchHeroSlides = () => {
+      if (event?.mobile_hero && Array.isArray(event.mobile_hero) && event.mobile_hero.length > 0) {
+        setMobileHeroSlides(event.mobile_hero);
+      }
+      
+      if (event?.hero_sections && Array.isArray(event.hero_sections) && event.hero_sections.length > 0) {
+        setDesktopHeroSlides(event.hero_sections);
+      }
+    };
 
-const handleTouchMove = (e) => {
-  setTouchEnd(e.targetTouches[0].clientX);
-};
+    fetchHeroSlides();
+  }, [event]);
 
-const handleTouchEnd = () => {
-  if (!touchStart || !touchEnd) return;
-  
-  const distance = touchStart - touchEnd;
-  const minSwipeDistance = 50; // Minimum distance for a swipe
-  
-  if (distance > minSwipeDistance) {
-    // Swipe left - next poster
-    nextPoster();
-  } else if (distance < -minSwipeDistance) {
-    // Swipe right - previous poster
-    prevPoster();
-  }
-  
-  // Reset touch positions
-  setTouchStart(0);
-  setTouchEnd(0);
-};
+  // ---------- determine which hero slides to use based on screen size ----------
+  useEffect(() => {
+    const updateHeroSlides = () => {
+      const isMobile = window.innerWidth < 768;
+      
+      if (isMobile && mobileHeroSlides.length > 0) {
+        // Use mobile hero slides if available
+        setHeroSlides(mobileHeroSlides);
+      } else if (desktopHeroSlides.length > 0) {
+        // Use desktop hero slides
+        setHeroSlides(desktopHeroSlides);
+      } else if (mobileHeroSlides.length > 0) {
+        // Fallback to mobile hero slides if desktop is empty
+        setHeroSlides(mobileHeroSlides);
+      } else {
+        // Default empty array
+        setHeroSlides([]);
+      }
+    };
 
-// Navigation functions are defined later in the file to avoid duplicate declarations.
+    updateHeroSlides();
+    
+    // Add event listener for window resize
+    window.addEventListener('resize', updateHeroSlides);
+    
+    return () => {
+      window.removeEventListener('resize', updateHeroSlides);
+    };
+  }, [mobileHeroSlides, desktopHeroSlides]);
+
+  const handleTouchStart = (e) => {
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const minSwipeDistance = 50; // Minimum distance for a swipe
+    
+    if (distance > minSwipeDistance) {
+      // Swipe left - next poster
+      nextPoster();
+    } else if (distance < -minSwipeDistance) {
+      // Swipe right - previous poster
+      prevPoster();
+    }
+    
+    // Reset touch positions
+    setTouchStart(0);
+    setTouchEnd(0);
+  };
   
   // ---------- fetch candidates and activities ----------
   useEffect(() => {
@@ -639,15 +685,16 @@ const handleTouchEnd = () => {
       {/* Main Content with padding top for header spacing */}
       <div className="pt-18">
         
-        {/* ENHANCED HERO SECTION WITH FULL LENGTH VIDEO SUPPORT */}
+        {/* ENHANCED HERO SECTION WITH MOBILE/DESKTOP SUPPORT */}
         <section className="relative w-full h-[50vh] md:h-[60vh] overflow-hidden">
           <AnimatePresence mode="wait">
             {heroSlides.map((slide, i) => {
               if (i !== heroIndex) return null;
+              const slideSrc = slide.src || slide.url || '';
               return slide.type === "video" ? (
                 <motion.video
-                  key={slide.id}
-                  src={slide.src}
+                  key={slide.id || i}
+                  src={slideSrc}
                   className="absolute inset-0 w-full h-full object-cover"
                   autoPlay
                   muted
@@ -660,7 +707,7 @@ const handleTouchEnd = () => {
                 />
               ) : (
                 <motion.div
-                  key={slide.id}
+                  key={slide.id || i}
                   className="absolute inset-0 w-full h-full"
                   initial={{ opacity: 0, scale: 1.1 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -668,7 +715,7 @@ const handleTouchEnd = () => {
                   transition={{ duration: 1.2, ease: "easeOut" }}
                 >
                   <Image 
-                    src={slide.src} 
+                    src={slideSrc} 
                     alt={slide.caption} 
                     fill 
                     className="object-cover" 
@@ -692,15 +739,15 @@ const handleTouchEnd = () => {
               transition={{ delay: 0.3, duration: 0.8 }}
             >
               <h1 className="text-xl md:text-3xl font-bold mb-2 md:mb-3 leading-tight drop-shadow-2xl">
-                {heroSlides[heroIndex]?.caption || "Premium Event Experience"}
+                {heroSlides[heroIndex]?.caption || event?.tagline || "Premium Event Experience"}
               </h1>
               <p className="text-base md:text-xl text-gold-200 font-light mb-4 md:mb-6 drop-shadow-lg">
                 {event?.tagline || "An unforgettable celebration of talent and excellence"}
               </p>
               <div className="flex flex-wrap items-center gap-2">
-                {heroSlides[heroIndex]?.cta && (
+                {heroSlides[heroIndex]?.cta?.label && (
                   <Link 
-                    href={heroSlides[heroIndex].cta.href} 
+                    href={heroSlides[heroIndex].cta.href || '#'} 
                     className="px-3 py-1.5 md:px-4 md:py-2 text-white rounded-lg font-semibold shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 text-xs md:text-sm"
                     style={{ 
                       backgroundColor: pageColor,
