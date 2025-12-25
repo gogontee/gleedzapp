@@ -576,8 +576,8 @@ export default function DefaultEventPage({ event }) {
   // ---------- get first 30 words from description ----------
   const getShortDescription = (text) => {
     if (!text) return "Discover the stunning visuals and moments from our event";
-    const words = text.split(' ').slice(0, 30);
-    return words.join(' ') + (words.length === 30 ? '...' : '');
+    const words = text.split(' ').slice(0, 60);
+    return words.join(' ') + (words.length === 60 ? '...' : '');
   };
 
   // ---------- get first 50 characters from content ----------
