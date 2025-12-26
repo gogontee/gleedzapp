@@ -13,7 +13,7 @@ import {
   PoundSterling, Key, Target, Car, Key as KeyIcon, Images, Download,
   Image as ImageIcon, Video, Music, Mic, Camera, Flag, Globe, Lock,
   Unlock, Settings, User, Users as UsersIcon, Phone as PhoneIcon,
-  Mail as MailIcon, Map as MapIcon
+  Mail as MailIcon, Map as MapIcon, ThumbsUp, MessageCircle
 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import EventHeader from "../../components/EventHeader";
@@ -33,6 +33,9 @@ export default function DefaultEventPage({ event }) {
   // ---------- sponsors ----------
   const sponsors = event?.group_banner2 || [];
 
+  // ---------- feature posts ----------
+  const [featurePosts, setFeaturePosts] = useState([]);
+
   // ---------- candidates state ----------
   const [candidates, setCandidates] = useState([]);
   const [activities, setActivities] = useState([]);
@@ -51,6 +54,9 @@ export default function DefaultEventPage({ event }) {
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [user, setUser] = useState(null);
+  const [featurePostsLikes, setFeaturePostsLikes] = useState({});
+  const [featurePostsViews, setFeaturePostsViews] = useState({});
+  
   const heroTimerRef = useRef(null);
   const posterTimerRef = useRef(null);
   const sponsorsRef = useRef(null);
@@ -103,6 +109,25 @@ export default function DefaultEventPage({ event }) {
       window.removeEventListener('resize', updateHeroSlides);
     };
   }, [mobileHeroSlides, desktopHeroSlides]);
+
+  // ---------- fetch feature posts ----------
+  useEffect(() => {
+    if (event?.main_gallery && Array.isArray(event.main_gallery)) {
+      // Take only first 4 posts
+      const firstFourPosts = event.main_gallery.slice(0, 4);
+      setFeaturePosts(firstFourPosts);
+      
+      // Initialize likes and views state
+      const initialLikes = {};
+      const initialViews = {};
+      firstFourPosts.forEach((post, index) => {
+        initialLikes[index] = post.likes || 0;
+        initialViews[index] = post.views || 0;
+      });
+      setFeaturePostsLikes(initialLikes);
+      setFeaturePostsViews(initialViews);
+    }
+  }, [event]);
 
   const handleTouchStart = (e) => {
     setTouchStart(e.targetTouches[0].clientX);
@@ -500,6 +525,14 @@ export default function DefaultEventPage({ event }) {
     });
   };
 
+  // ---------- feature post like toggle ----------
+  const toggleFeaturePostLike = (postIndex) => {
+    setFeaturePostsLikes(prev => ({
+      ...prev,
+      [postIndex]: prev[postIndex] + 1
+    }));
+  };
+
   // ---------- share functionality ----------
   const handleShare = async () => {
     const shareData = {
@@ -659,6 +692,7 @@ export default function DefaultEventPage({ event }) {
   const hasPosters = posters.length > 0;
   const hasContact = contactInfo !== null;
   const hasSponsors = sponsors.length > 0;
+  const hasFeaturePosts = featurePosts.length > 0;
 
   // Calculate grid layout based on available content
   const getGalleryGridClass = () => {
@@ -675,6 +709,44 @@ export default function DefaultEventPage({ event }) {
     if (count === 2) return "grid-cols-2 max-w-md mx-auto";
     if (count === 3) return "grid-cols-3 max-w-2xl mx-auto";
     return "grid-cols-2 md:grid-cols-4 max-w-7xl";
+  };
+
+  // Handle feature post click - redirect to gallery page
+  const handleFeaturePostClick = (postIndex) => {
+    // Redirect to gallery page where all posts can be viewed
+    window.location.href = `/myevent/${event?.id}/gallery?post=${postIndex}`;
+  };
+
+  // Handle feature post download
+  const handleFeaturePostDownload = (postIndex, e) => {
+    e.stopPropagation();
+    const post = featurePosts[postIndex];
+    if (post?.downloadable && post.image) {
+      const link = document.createElement('a');
+      link.href = post.image;
+      link.download = `event-post-${postIndex + 1}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  // Handle feature post share
+  const handleFeaturePostShare = (postIndex, e) => {
+    e.stopPropagation();
+    const post = featurePosts[postIndex];
+    if (post?.shareable && post.image) {
+      if (navigator.share) {
+        navigator.share({
+          title: 'Event Post',
+          text: post.caption || 'Check out this event post!',
+          url: post.image,
+        });
+      } else {
+        navigator.clipboard.writeText(post.image);
+        alert('Image link copied to clipboard!');
+      }
+    }
   };
 
   return (
@@ -1304,6 +1376,210 @@ export default function DefaultEventPage({ event }) {
           </div>
         )}
       </div>
+    </section>
+  )}
+
+  {/* FEATURE POSTS SECTION - New section after event visuals */}
+  {hasFeaturePosts && (
+    <section id="feature-posts" className="mt-12">
+      <motion.div 
+        className="text-center mb-8"
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+      >
+        <h2 className="text-3xl font-bold text-gray-900 mb-3">Featured Posts</h2>
+        <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          Discover the latest updates and highlights from the event
+        </p>
+      </motion.div>
+
+      {/* Desktop: 4-column grid */}
+      <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {featurePosts.map((post, index) => (
+          <motion.div 
+            key={index}
+            className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gold-100/50 hover:shadow-xl transition-all duration-300 group cursor-pointer"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: index * 0.1 }}
+            onClick={() => handleFeaturePostClick(index)}
+          >
+            {/* Post Image/Video */}
+            <div className="relative h-48 overflow-hidden">
+              {isVideoFile(post.image) ? (
+                <video
+                  src={post.image}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                />
+              ) : (
+                <Image
+                  src={post.image || '/placeholder-image.jpg'}
+                  alt={`Post ${index + 1}`}
+                  fill
+                  className="object-cover group-hover:scale-105 transition-transform duration-300"
+                  unoptimized
+                />
+              )}
+              {/* Overlay gradient */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            </div>
+
+            {/* Post Content */}
+            <div className="p-4">
+              <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                {post.caption || "Check out this amazing post from the event!"}
+              </p>
+              
+              {/* Post Stats and Actions */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  {/* Likes */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFeaturePostLike(index);
+                    }}
+                    className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors"
+                  >
+                    <ThumbsUp className="w-4 h-4" />
+                    <span className="text-xs font-medium">{featurePostsLikes[index] || 0}</span>
+                  </button>
+                  
+                  {/* Views */}
+                  <div className="flex items-center gap-1 text-gray-500">
+                    <Eye className="w-4 h-4" />
+                    <span className="text-xs font-medium">{featurePostsViews[index] || 0}</span>
+                  </div>
+                </div>
+                
+                {/* Share & Download Actions */}
+                <div className="flex items-center gap-2">
+                  {post.shareable && (
+                    <button 
+                      onClick={(e) => handleFeaturePostShare(index, e)}
+                      className="p-1 text-gray-500 hover:text-blue-500 transition-colors"
+                      title="Share"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  
+                  {post.downloadable && (
+                    <button 
+                      onClick={(e) => handleFeaturePostDownload(index, e)}
+                      className="p-1 text-gray-500 hover:text-green-500 transition-colors"
+                      title="Download"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Mobile: 2-column grid with 4 posts */}
+      <div className="grid md:hidden grid-cols-2 gap-3">
+        {featurePosts.slice(0, 4).map((post, index) => (
+          <motion.div 
+            key={index}
+            className="bg-white rounded-xl shadow-md overflow-hidden border border-gold-100/50 hover:shadow-lg transition-all duration-300 group cursor-pointer"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: index * 0.1 }}
+            onClick={() => handleFeaturePostClick(index)}
+          >
+            {/* Post Image/Video */}
+            <div className="relative h-40 overflow-hidden">
+              {isVideoFile(post.image) ? (
+                <video
+                  src={post.image}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                />
+              ) : (
+                <Image
+                  src={post.image || '/placeholder-image.jpg'}
+                  alt={`Post ${index + 1}`}
+                  fill
+                  className="object-cover group-hover:scale-105 transition-transform duration-300"
+                  unoptimized
+                />
+              )}
+            </div>
+
+            {/* Post Content */}
+            <div className="p-3">
+              <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                {post.caption || "Check out this amazing post!"}
+              </p>
+              
+              {/* Post Stats and Actions */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {/* Likes */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFeaturePostLike(index);
+                    }}
+                    className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors"
+                  >
+                    <ThumbsUp className="w-3 h-3" />
+                    <span className="text-xs font-medium">{featurePostsLikes[index] || 0}</span>
+                  </button>
+                  
+                  {/* Views */}
+                  <div className="flex items-center gap-1 text-gray-500">
+                    <Eye className="w-3 h-3" />
+                    <span className="text-xs font-medium">{featurePostsViews[index] || 0}</span>
+                  </div>
+                </div>
+                
+                {/* Share Action Only on Mobile */}
+                {post.shareable && (
+                  <button 
+                    onClick={(e) => handleFeaturePostShare(index, e)}
+                    className="p-1 text-gray-500 hover:text-blue-500 transition-colors"
+                    title="Share"
+                  >
+                    <Share2 className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* View All Link */}
+      {featurePosts.length > 4 && (
+        <div className="text-center mt-6">
+          <Link 
+            href={`/myevent/${event?.id}/gallery`}
+            className="inline-flex items-center gap-2 px-6 py-3 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+            style={{ 
+              backgroundColor: pageColor,
+              boxShadow: `0 10px 15px -3px ${pageColor}40, 0 4px 6px -4px ${pageColor}40`
+            }}
+          >
+            <Images className="w-4 h-4" />
+            View All Posts
+          </Link>
+        </div>
+      )}
     </section>
   )}
           {/* NEWS SECTION - Only render if news exist */}
