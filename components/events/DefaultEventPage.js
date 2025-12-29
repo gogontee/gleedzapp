@@ -811,10 +811,10 @@ export default function DefaultEventPage({ event }) {
               transition={{ delay: 0.3, duration: 0.8 }}
             >
               <h1 className="text-xl md:text-3xl font-bold mb-2 md:mb-3 leading-tight drop-shadow-2xl">
-                {heroSlides[heroIndex]?.caption || event?.tagline || "Premium Event Experience"}
+                {heroSlides[heroIndex]?.caption || event?.tagline || "Premium Experience"}
               </h1>
               <p className="text-base md:text-xl text-gold-200 font-light mb-4 md:mb-6 drop-shadow-lg">
-                {event?.tagline || "An unforgettable celebration of talent and excellence"}
+                {heroSlides[heroIndex]?.tagline || event?.tagline || "An unforgettable celebration of talent and excellence"}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 {heroSlides[heroIndex]?.cta?.label && (

@@ -25,7 +25,8 @@ import {
   EyeOff,
   Layout,
   Type,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Music
 } from 'lucide-react';
 import { supabase } from '../../../../lib/supabaseClient';
 import EventHeader from '../../../../components/EventHeader';
@@ -33,7 +34,7 @@ import EventHeader from '../../../../components/EventHeader';
 // Available icons for different contact types
 const availableIcons = {
   Mail, Phone, MapPin, MessageCircle, Twitter, Facebook, Instagram, Linkedin,
-  MessageSquare, Building, Globe, Bell, Layout, Type, ImageIcon
+  MessageSquare, Building, Globe, Bell, Layout, Type, ImageIcon, Music
 };
 
 // Default structure for the contacts object
@@ -44,7 +45,8 @@ const defaultContact = {
     twitter: '',
     facebook: '',
     instagram: '',
-    linkedin: ''
+    linkedin: '',
+    tiktok: '' // Added TikTok field
   },
   officeAddress: {
     street: '',
@@ -103,6 +105,11 @@ export default function EventContactPage() {
       const mergedContact = {
         ...defaultContact,
         ...eventContact,
+        // Ensure socialMedia has tiktok field
+        socialMedia: {
+          ...defaultContact.socialMedia,
+          ...eventContact.socialMedia
+        },
         // Ensure customFields array exists
         customFields: eventContact.customFields || []
       };
@@ -381,6 +388,13 @@ export default function EventContactPage() {
                       color="blue-700"
                     />
                   )}
+                  {contact.socialMedia.tiktok && (
+                    <SocialLink 
+                      url={contact.socialMedia.tiktok}
+                      icon={Music}
+                      color="gray-900"
+                    />
+                  )}
                 </div>
               </motion.div>
 
@@ -579,7 +593,7 @@ export default function EventContactPage() {
                     {Object.entries(contact.socialMedia).map(([platform, url]) => (
                       <div key={platform}>
                         <label className="block text-sm font-medium text-gray-700 mb-1 capitalize">
-                          {platform} URL
+                          {platform === 'tiktok' ? 'TikTok' : platform} URL
                         </label>
                         <input
                           type="url"
@@ -590,7 +604,7 @@ export default function EventContactPage() {
                           }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent transition-all duration-300"
                           style={{ focusRingColor: pageColor }}
-                          placeholder={`https://${platform}.com/username`}
+                          placeholder={`https://${platform === 'tiktok' ? 'tiktok.com' : platform + '.com'}/username`}
                         />
                       </div>
                     ))}
