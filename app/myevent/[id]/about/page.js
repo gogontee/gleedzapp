@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Edit3, Save, Plus, Trash2, Eye, EyeOff, Users, Target, 
   Award, Globe, ChevronLeft, ChevronRight, Play, Pause,
   Crown, Share2, Heart, MapPin, Clock, Menu, X,
   Building, ExternalLink, Bold, Italic, Link, List, Image,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, FileText
 } from "lucide-react";
 import { supabase } from "../../../../lib/supabaseClient";
 import EventHeader from "../../../../components/EventHeader";
@@ -25,10 +25,20 @@ const countWords = (htmlContent) => {
   return text.trim().split(/\s+/).filter(word => word.length > 0).length;
 };
 
-// Helper component to render rich text with "Read More" functionality
-const RichTextWithReadMore = ({ content, maxWords = 60, className = "" }) => {
+// Helper component to render rich text with "Read More" functionality - ONLY FOR VIEW MODE
+const RichTextWithReadMore = ({ content, maxWords = 60, className = "", isEditMode = false }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const wordCount = useMemo(() => countWords(content), [content]);
+  
+  // In edit mode, always show full content
+  if (isEditMode) {
+    return (
+      <div className={`rich-text-content ${className}`}>
+        <div dangerouslySetInnerHTML={{ __html: content }} />
+      </div>
+    );
+  }
+
   const shouldTruncate = wordCount > maxWords && !isExpanded;
 
   // Function to truncate HTML content by words
@@ -100,10 +110,19 @@ const RichTextWithReadMore = ({ content, maxWords = 60, className = "" }) => {
   );
 };
 
-// Special component for About, Mission, Vision, Objectives sections - Read More at the end
-const MainContentWithReadMore = ({ content, maxWords = 60, className = "" }) => {
+// Content display component that shows full content in edit mode
+const ContentDisplay = ({ content, maxWords = 60, className = "", isEditMode = false }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const wordCount = useMemo(() => countWords(content), [content]);
+
+  // In edit mode, always show full content without any truncation
+  if (isEditMode) {
+    return (
+      <div className={`rich-text-content ${className}`}>
+        <div dangerouslySetInnerHTML={{ __html: content }} />
+      </div>
+    );
+  }
 
   if (!content) {
     return (
@@ -112,43 +131,6 @@ const MainContentWithReadMore = ({ content, maxWords = 60, className = "" }) => 
       </p>
     );
   }
-
-  return (
-    <div className={`rich-text-content ${className}`}>
-      {/* Always show full content, but control visibility with CSS */}
-      <div 
-        dangerouslySetInnerHTML={{ __html: content }}
-        className={`transition-all duration-300 ${!isExpanded && wordCount > maxWords ? 'max-h-48 overflow-hidden relative after:content-[""] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-12 after:bg-gradient-to-t after:from-white after:to-transparent' : ''}`}
-      />
-      {wordCount > maxWords && (
-        <div className="mt-4">
-          {!isExpanded ? (
-            <button
-              onClick={() => setIsExpanded(true)}
-              className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-medium text-sm transition-colors"
-            >
-              <ChevronDown className="w-4 h-4" />
-              Read More
-            </button>
-          ) : (
-            <button
-              onClick={() => setIsExpanded(false)}
-              className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-medium text-sm transition-colors"
-            >
-              <ChevronUp className="w-4 h-4" />
-              Show Less
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Alternative approach: Truncate text properly with fade effect
-const TruncatedContent = ({ content, maxWords = 60, className = "" }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const wordCount = useMemo(() => countWords(content), [content]);
 
   // Function to get truncated text (simpler approach)
   const getTruncatedText = (html, maxWords) => {
@@ -169,14 +151,6 @@ const TruncatedContent = ({ content, maxWords = 60, className = "" }) => {
   const displayContent = !isExpanded && wordCount > maxWords 
     ? getTruncatedText(content, maxWords) 
     : content;
-
-  if (!content) {
-    return (
-      <p className="text-gray-500 italic text-sm md:text-base">
-        No content provided.
-      </p>
-    );
-  }
 
   return (
     <div className={`rich-text-content ${className}`}>
@@ -312,6 +286,7 @@ const TeamMemberCard = ({ member, index, editMode, updateTeamMember, removeTeamM
                   content={member.about} 
                   maxWords={40} // Lower threshold for team bios
                   className="text-sm sm:text-base"
+                  isEditMode={editMode}
                 />
               </div>
             ) : (
@@ -326,6 +301,7 @@ const TeamMemberCard = ({ member, index, editMode, updateTeamMember, removeTeamM
 
 export default function AboutPage() {
   const params = useParams();
+  const router = useRouter();
   const eventId = params.id;
   
   const [event, setEvent] = useState(null);
@@ -622,6 +598,11 @@ export default function AboutPage() {
     }
   };
 
+  // Navigate to terms page
+  const navigateToTerms = () => {
+    router.push(`/myevent/${eventId}/terms`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -718,12 +699,12 @@ export default function AboutPage() {
           )}
         </section>
 
-        {/* Edit Mode Toggle */}
-        {isOwner && (
-          <div className="bg-white border-b border-gray-200 shadow-sm">
-            <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 sm:py-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-                <div className="flex items-center gap-3">
+        {/* Edit Mode Toggle & Terms Button */}
+        <div className="bg-white border-b border-gray-200 shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 sm:py-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+              <div className="flex items-center gap-3">
+                {isOwner && (
                   <button
                     onClick={() => setEditMode(!editMode)}
                     className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md ${
@@ -737,21 +718,32 @@ export default function AboutPage() {
                     <span className="hidden sm:inline">{editMode ? 'Exit Edit Mode' : 'Edit About Page'}</span>
                     <span className="sm:hidden">{editMode ? 'Exit Edit' : 'Edit'}</span>
                   </button>
-                  
-                  {editMode && (
-                    <button
-                      onClick={handleSave}
-                      disabled={saving}
-                      className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 disabled:opacity-50 shadow-sm hover:shadow-md transition-all"
-                    >
-                      <Save className="w-4 h-4" />
-                      <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save Changes'}</span>
-                      <span className="sm:hidden">{saving ? 'Saving...' : 'Save'}</span>
-                    </button>
-                  )}
-                </div>
+                )}
+                
+                {/* Terms of Use Button */}
+                <button
+                  onClick={navigateToTerms}
+                  className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg font-medium transition-all shadow-sm hover:shadow-md border border-gray-200"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="text-sm">Terms of Use</span>
+                </button>
+              </div>
 
-                {editMode && (
+              <div className="flex items-center gap-3">
+                {isOwner && editMode && (
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 disabled:opacity-50 shadow-sm hover:shadow-md transition-all"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save Changes'}</span>
+                    <span className="sm:hidden">{saving ? 'Saving...' : 'Save'}</span>
+                  </button>
+                )}
+
+                {isOwner && editMode && (
                   <div className="text-sm text-gray-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100">
                     <span className="flex items-center gap-1.5">
                       <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
@@ -763,12 +755,12 @@ export default function AboutPage() {
               </div>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Main Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-8 sm:py-12 space-y-12 sm:space-y-16">
           {/* Section Toggles - Edit Mode Only */}
-          {editMode && (
+          {editMode && isOwner && (
             <motion.section
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -811,7 +803,7 @@ export default function AboutPage() {
               className="bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden border border-gray-200"
             >
               <div className="p-6 sm:p-8 md:p-10">
-                {editMode ? (
+                {editMode && isOwner ? (
                   <div className="space-y-6">
                     <input
                       type="text"
@@ -849,10 +841,11 @@ export default function AboutPage() {
                     <div className="prose prose-sm sm:prose-base md:prose-lg max-w-none text-gray-700 leading-relaxed">
                       {fullDetail.about.content ? (
                         <div className="space-y-4">
-                          <TruncatedContent 
+                          <ContentDisplay 
                             content={fullDetail.about.content} 
-                            maxWords={60} // 60 words threshold for About section
+                            maxWords={60}
                             className="text-sm sm:text-base md:text-lg"
+                            isEditMode={editMode && isOwner}
                           />
                         </div>
                       ) : (
@@ -886,7 +879,7 @@ export default function AboutPage() {
                     animate={{ opacity: 1, y: 0 }}
                     className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-6 sm:p-8 border border-gray-200 hover:shadow-xl transition-shadow duration-300 h-full flex flex-col"
                   >
-                    {editMode ? (
+                    {editMode && isOwner ? (
                       <div className="space-y-4 h-full flex flex-col">
                         <input
                           type="text"
@@ -925,10 +918,11 @@ export default function AboutPage() {
                         <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4">{fullDetail[key].title}</h3>
                         <div className="flex-grow">
                           {fullDetail[key].content ? (
-                            <TruncatedContent 
+                            <ContentDisplay 
                               content={fullDetail[key].content} 
-                              maxWords={60} // 60 words threshold for Mission, Vision, Objectives
+                              maxWords={60}
                               className="text-sm sm:text-base"
+                              isEditMode={editMode && isOwner}
                             />
                           ) : (
                             <p className="text-gray-600 text-sm sm:text-base">
@@ -953,7 +947,7 @@ export default function AboutPage() {
             >
               <div className="p-6 sm:p-8 md:p-10">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4 sm:gap-0">
-                  {editMode ? (
+                  {editMode && isOwner ? (
                     <input
                       type="text"
                       value={fullDetail.team.title}
@@ -965,7 +959,7 @@ export default function AboutPage() {
                     <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{fullDetail.team.title}</h2>
                   )}
                   
-                  {editMode && (
+                  {editMode && isOwner && (
                     <button
                       onClick={addTeamMember}
                       className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 text-white rounded-lg font-semibold hover:shadow-md transition-all w-full sm:w-auto justify-center"
@@ -984,14 +978,14 @@ export default function AboutPage() {
                       key={member.id}
                       member={member}
                       index={index}
-                      editMode={editMode}
+                      editMode={editMode && isOwner}
                       updateTeamMember={updateTeamMember}
                       removeTeamMember={removeTeamMember}
                       handleFileUpload={handleFileUpload}
                     />
                   ))}
                   
-                  {fullDetail.team.members.length === 0 && !editMode && (
+                  {fullDetail.team.members.length === 0 && !(editMode && isOwner) && (
                     <div className="col-span-full text-center py-12 sm:py-16 text-gray-500">
                       <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4 sm:mb-6">
                         <Users className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400" />
@@ -1016,7 +1010,7 @@ export default function AboutPage() {
             >
               <div className="p-6 sm:p-8 md:p-10">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4 sm:gap-0">
-                  {editMode ? (
+                  {editMode && isOwner ? (
                     <input
                       type="text"
                       value={fullDetail.sponsors.title}
@@ -1028,7 +1022,7 @@ export default function AboutPage() {
                     <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{fullDetail.sponsors.title}</h2>
                   )}
                   
-                  {editMode && (
+                  {editMode && isOwner && (
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
                       <input
                         type="text"
@@ -1052,7 +1046,7 @@ export default function AboutPage() {
                   )}
                 </div>
 
-                {Object.keys(fullDetail.sponsors.categories).length === 0 && !editMode ? (
+                {Object.keys(fullDetail.sponsors.categories).length === 0 && !(editMode && isOwner) ? (
                   <div className="text-center py-12 sm:py-16 text-gray-500">
                     <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4 sm:mb-6">
                       <Building className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400" />
@@ -1072,7 +1066,7 @@ export default function AboutPage() {
                             <div className="h-1 w-16 sm:w-20 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"></div>
                           </div>
                           
-                          {editMode && (
+                          {editMode && isOwner && (
                             <div className="flex items-center gap-2 sm:gap-3 mt-4 sm:mt-0">
                               <button
                                 onClick={() => addSponsor(category)}
@@ -1095,7 +1089,7 @@ export default function AboutPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                           {sponsors.map((sponsor, index) => (
                             <div key={sponsor.id} className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-5 border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all">
-                              {editMode ? (
+                              {editMode && isOwner ? (
                                 <div className="space-y-3 sm:space-y-4">
                                   <div className="flex items-start justify-between">
                                     <input
@@ -1172,8 +1166,9 @@ export default function AboutPage() {
                                     {sponsor.description ? (
                                       <RichTextWithReadMore 
                                         content={sponsor.description} 
-                                        maxWords={30} // Very low threshold for sponsor descriptions
+                                        maxWords={30}
                                         className="text-xs sm:text-sm"
+                                        isEditMode={editMode && isOwner}
                                       />
                                     ) : (
                                       <p className="text-gray-700 text-xs sm:text-sm leading-relaxed">
@@ -1198,7 +1193,7 @@ export default function AboutPage() {
                             </div>
                           ))}
                           
-                          {sponsors.length === 0 && !editMode && (
+                          {sponsors.length === 0 && !(editMode && isOwner) && (
                             <div className="col-span-full text-center py-8 sm:py-12 text-gray-500 text-sm sm:text-base">
                               <Building className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 mx-auto mb-3 sm:mb-4 text-gray-300" />
                               <p>No sponsors in this category yet.</p>
@@ -1288,6 +1283,17 @@ export default function AboutPage() {
         
         .rich-text-content em {
           font-style: italic;
+        }
+        
+        /* Edit mode specific styles */
+        .edit-mode .rich-text-content {
+          max-height: none !important;
+          overflow: visible !important;
+        }
+        
+        .edit-mode .rich-text-content > div {
+          max-height: none !important;
+          overflow: visible !important;
         }
         
         .quill {

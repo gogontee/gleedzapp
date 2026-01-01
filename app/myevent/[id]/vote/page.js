@@ -328,12 +328,12 @@ export default function EventVotePage() {
               <Users className="w-12 h-12" style={{ color: pageColor }} />
             </div>
             <h3 className="text-xl font-bold text-gray-900 mb-3">
-              {searchTerm ? 'No Candidates Found' : 'No Candidates Yet'}
+              {searchTerm ? 'No Candidates Found' : 'No Approved Candidates Yet'}
             </h3>
             <p className="text-gray-600 max-w-md mx-auto text-sm mb-6">
               {searchTerm 
                 ? `No results for "${searchTerm}"`
-                : 'Candidates will be announced soon!'
+                : 'Candidates will be approved soon!'
               }
             </p>
             {searchTerm && (
