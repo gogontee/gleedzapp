@@ -751,22 +751,21 @@ export default function HomeClient({ logoUrl, posters }) {
               idx === currentHero ? (
                 slide.type === "video" ? (
                   <motion.video
-                    key={idx}
-                    src={getCacheBustedUrl(slide.src)}
-                    autoPlay
-                    muted
-                    playsInline
-                    className="absolute inset-0 w-full h-full object-cover"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 1 }}
-                    onEnded={handleVideoEnd}
-                    onError={(e) => {
-                      console.error('Video failed to load:', slide.src);
-                      handleVideoEnd();
-                    }}
-                  />
+  key={idx}
+  src={getCacheBustedUrl(slide.src)}
+  autoPlay
+  playsInline
+  className="absolute inset-0 w-full h-full object-cover"
+  initial={{ opacity: 0 }}
+  animate={{ opacity: 1 }}
+  exit={{ opacity: 0 }}
+  transition={{ duration: 1 }}
+  onEnded={handleVideoEnd}
+  onError={(e) => {
+    console.error('Video failed to load:', slide.src);
+    handleVideoEnd();
+  }}
+/>
                 ) : (
                   <motion.div
                     key={idx}
