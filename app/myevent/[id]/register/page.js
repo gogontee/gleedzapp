@@ -15,7 +15,7 @@ export default function RegisterPage() {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [colors, setColors] = useState(null);
-  const [activeForm, setActiveForm] = useState("other"); // "other" or "candidate"
+  const [activeForm, setActiveForm] = useState("candidate"); // ⬅️ Changed from "other" to "candidate"
 
   useEffect(() => {
     loadEvent();
@@ -175,12 +175,18 @@ export default function RegisterPage() {
             >
               {event.title}
             </h1>
-            <p
-              className="mb-6 text-lg font-semibold md:font-bold transition-colors duration-300"
-              style={{ color: currentColors.text }}
-            >
-              {event.tagline || event.description}
-            </p>
+            
+            {/* Updated Description Section */}
+            {event.tagline || event.description ? (
+              <div className="mb-6">
+                <p
+                  className="text-base font-normal transition-colors duration-300"
+                  style={{ color: currentColors.text }}
+                >
+                  {event.tagline || event.description}
+                </p>
+              </div>
+            ) : null}
 
             {/* Form Toggle */}
             <div className="flex space-x-1 p-1 rounded-lg bg-gray-100 max-w-md">

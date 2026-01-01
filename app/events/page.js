@@ -73,6 +73,18 @@ export default function EventsPage() {
     );
   }, [search, events]);
 
+  // Function to truncate description to 30 words
+  const truncateDescription = (text, wordLimit = 30) => {
+    if (!text) return "Join us for an unforgettable experience.";
+    
+    const words = text.split(/\s+/);
+    if (words.length <= wordLimit) {
+      return text;
+    }
+    
+    return words.slice(0, wordLimit).join(' ') + '...';
+  };
+
   // Navigation items - Fixed dashboard link
   const navItems = [
     { href: "/", label: "Home", icon: Home },
@@ -107,6 +119,293 @@ export default function EventsPage() {
       </p>
     </div>
   );
+
+  // Desktop Event Card Component
+  const DesktopEventCard = ({ event, isList }) => {
+    const truncatedDescription = truncateDescription(event.description);
+    
+    if (isList) {
+      return (
+        <motion.div
+          whileHover={{ scale: 1.01, y: -2 }}
+          whileTap={{ scale: 0.99 }}
+          className="flex gap-6 bg-white rounded-2xl shadow-lg hover:shadow-xl border border-gray-100 overflow-hidden transition-all duration-300 cursor-pointer group"
+        >
+          {/* Thumbnail */}
+          {event.thumbnail && (
+            <div className="w-64 h-48 flex-shrink-0">
+              <Image
+                src={event.thumbnail}
+                alt={event.name}
+                width={256}
+                height={192}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              />
+            </div>
+          )}
+
+          {/* Event Content */}
+          <div className="flex-1 p-6">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3">
+                {event.logo && (
+                  <div className="w-12 h-12 relative">
+                    <Image
+                      src={event.logo}
+                      alt={`${event.name} logo`}
+                      width={48}
+                      height={48}
+                      className="object-contain rounded-[10px]"
+                    />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">
+                    {event.name}
+                  </h3>
+                  <span 
+                    className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold border"
+                    style={{ 
+                      backgroundColor: `${event.page_color || '#f59e0b'}10`,
+                      borderColor: event.page_color || '#f59e0b',
+                      color: event.page_color || '#f59e0b'
+                    }}
+                  >
+                    {event.type}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-gray-600 leading-relaxed mb-4 text-sm">
+              {truncatedDescription}
+            </p>
+
+            <div className="flex items-center justify-between">
+              <Link href={`/myevent/${event.id}`}>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow text-sm"
+                >
+                  View Event
+                </motion.button>
+              </Link>
+            </div>
+          </div>
+        </motion.div>
+      );
+    }
+
+    // Grid View
+    return (
+      <motion.div
+        whileHover={{ scale: 1.03, y: -4 }}
+        whileTap={{ scale: 0.98 }}
+        className="bg-white rounded-2xl shadow-lg hover:shadow-xl border border-gray-100 overflow-hidden transition-all duration-300 cursor-pointer group"
+      >
+        {/* Thumbnail */}
+        {event.thumbnail && (
+          <div className="w-full h-48 relative overflow-hidden">
+            <Image
+              src={event.thumbnail}
+              alt={event.name}
+              width={400}
+              height={192}
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          </div>
+        )}
+
+        {/* Event Content */}
+        <div className="p-5">
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-3">
+              {event.logo && (
+                <div className="w-10 h-10 relative">
+                  <Image
+                    src={event.logo}
+                    alt={`${event.name} logo`}
+                    width={40}
+                    height={40}
+                    className="object-contain rounded-[8px]"
+                  />
+                </div>
+              )}
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-gray-900 mb-1 line-clamp-1">
+                  {event.name}
+                </h3>
+                <span 
+                  className="inline-block px-2 py-1 rounded-full text-xs font-semibold border"
+                  style={{ 
+                    backgroundColor: `${event.page_color || '#f59e0b'}10`,
+                    borderColor: event.page_color || '#f59e0b',
+                    color: event.page_color || '#f59e0b'
+                  }}
+                >
+                  {event.type}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-gray-600 text-sm mb-4 line-clamp-2 leading-relaxed">
+            {truncatedDescription}
+          </p>
+
+          <Link href={`/myevent/${event.id}`}>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="w-full py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow text-sm"
+            >
+              View Event
+            </motion.button>
+          </Link>
+        </div>
+      </motion.div>
+    );
+  };
+
+  // Mobile Event Card Component
+  const MobileEventCard = ({ event, isList }) => {
+    const truncatedDescription = truncateDescription(event.description, 20);
+    
+    if (isList) {
+      return (
+        <motion.div
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+          className="flex gap-3 bg-white rounded-xl shadow-md hover:shadow-lg border border-gray-100 overflow-hidden transition-all duration-300 cursor-pointer group"
+        >
+          {/* Thumbnail */}
+          {event.thumbnail && (
+            <div className="w-24 h-24 flex-shrink-0">
+              <Image
+                src={event.thumbnail}
+                alt={event.name}
+                width={96}
+                height={96}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              />
+            </div>
+          )}
+
+          {/* Event Content */}
+          <div className="flex-1 p-3">
+            <div className="flex items-center gap-2 mb-1">
+              {event.logo && (
+                <div className="w-6 h-6 relative">
+                  <Image
+                    src={event.logo}
+                    alt={`${event.name} logo`}
+                    width={24}
+                    height={24}
+                    className="object-contain rounded-[6px]"
+                  />
+                </div>
+              )}
+              <h3 className="font-semibold text-gray-900 text-sm flex-1 truncate">
+                {event.name}
+              </h3>
+            </div>
+
+            <span 
+              className="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-medium border mb-2"
+              style={{ 
+                backgroundColor: `${event.page_color || '#f59e0b'}10`,
+                borderColor: event.page_color || '#f59e0b',
+                color: event.page_color || '#f59e0b'
+              }}
+            >
+              {event.type}
+            </span>
+
+            <p className="text-gray-600 text-xs line-clamp-2 mb-3">
+              {truncatedDescription}
+            </p>
+
+            <Link href={`/myevent/${event.id}`}>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-medium rounded-lg transition-all duration-200 w-full"
+              >
+                View Event
+              </motion.button>
+            </Link>
+          </div>
+        </motion.div>
+      );
+    }
+
+    // Grid View
+    return (
+      <motion.div
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.98 }}
+        className="bg-white rounded-xl shadow-md hover:shadow-lg border border-gray-100 overflow-hidden transition-all duration-300 cursor-pointer group"
+      >
+        {/* Thumbnail */}
+        {event.thumbnail && (
+          <div className="w-full h-32 relative overflow-hidden">
+            <Image
+              src={event.thumbnail}
+              alt={event.name}
+              width={400}
+              height={128}
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+            />
+          </div>
+        )}
+
+        {/* Event Content */}
+        <div className="p-3">
+          <div className="flex items-center gap-2 mb-1">
+            {event.logo && (
+              <div className="w-6 h-6 relative">
+                <Image
+                  src={event.logo}
+                  alt={`${event.name} logo`}
+                  width={24}
+                  height={24}
+                  className="object-contain rounded-[6px]"
+                />
+              </div>
+            )}
+            <h3 className="font-semibold text-gray-900 text-xs flex-1 truncate">
+              {event.name}
+            </h3>
+          </div>
+
+          <span 
+            className="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-medium border mb-2"
+            style={{ 
+              backgroundColor: `${event.page_color || '#f59e0b'}10`,
+              borderColor: event.page_color || '#f59e0b',
+              color: event.page_color || '#f59e0b'
+            }}
+          >
+            {event.type}
+          </span>
+
+          <p className="text-gray-600 text-xs line-clamp-2 mb-3">
+            {truncatedDescription}
+          </p>
+
+          <Link href={`/myevent/${event.id}`}>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              className="w-full py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-medium rounded-lg transition-all duration-200"
+            >
+              View Event
+            </motion.button>
+          </Link>
+        </div>
+      </motion.div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-white">
@@ -225,91 +524,15 @@ export default function EventsPage() {
               ) : (
                 <div className={
                   isList 
-                    ? "space-y-6 max-w-4xl" 
+                    ? "space-y-6 max-w-5xl" 
                     : "grid grid-cols-3 gap-8"
                 }>
                   {filteredEvents.map((event) => (
-                    <motion.div
-                      key={event.id}
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={
-                        isList 
-                          ? "flex gap-6 bg-white rounded-2xl shadow-lg hover:shadow-xl border border-gray-100 overflow-hidden transition-all duration-300 cursor-pointer"
-                          : "bg-white rounded-2xl shadow-lg hover:shadow-xl border border-gray-100 overflow-hidden transition-all duration-300 cursor-pointer"
-                      }
-                    >
-                      {/* Thumbnail */}
-                      {event.thumbnail && (
-                        <div className={
-                          isList 
-                            ? "w-48 h-48 flex-shrink-0" 
-                            : "w-full h-48"
-                        }>
-                          <Image
-                            src={event.thumbnail}
-                            alt={event.name}
-                            width={isList ? 192 : 400}
-                            height={192}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      )}
-
-                      {/* Event Content */}
-                      <div className={isList ? "flex-1 p-6" : "p-6"}>
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            {event.logo && (
-                              <div className="w-10 h-10 relative">
-                                <Image
-                                  src={event.logo}
-                                  alt={`${event.name} logo`}
-                                  width={40}
-                                  height={40}
-                                  className="object-contain rounded-[15px]"
-                                />
-                              </div>
-                            )}
-                            <div>
-                              <h3 className="text-xl font-bold text-gray-900 mb-1">
-                                {event.name}
-                              </h3>
-                              <span 
-                                className="inline-block px-3 py-1 rounded-full text-sm font-semibold border"
-                                style={{ 
-                                  backgroundColor: `${event.page_color || '#f59e0b'}15`,
-                                  borderColor: event.page_color || '#f59e0b',
-                                  color: event.page_color || '#f59e0b'
-                                }}
-                              >
-                                {event.type}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <p className="text-gray-600 leading-relaxed mb-4">
-                          {event.description || "Join us for an unforgettable experience filled with excitement and entertainment."}
-                        </p>
-
-                        <div className="flex items-center justify-between">
-                          <Link href={`/myevent/${event.id}`}>
-                            <motion.button
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              className="px-6 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
-                            >
-                              View Event
-                            </motion.button>
-                          </Link>
-                          
-                          <div className="text-sm text-gray-500">
-                            {event.page_color ? "Featured" : "Popular"}
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
+                    <DesktopEventCard 
+                      key={event.id} 
+                      event={event} 
+                      isList={isList} 
+                    />
                   ))}
                 </div>
               )}
@@ -385,73 +608,11 @@ export default function EventsPage() {
                 : "grid grid-cols-2 gap-4"
             }>
               {filteredEvents.map((event) => (
-                <motion.div
-                  key={event.id}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={
-                    isList 
-                      ? "bg-white rounded-xl shadow-md hover:shadow-lg border border-gray-100 overflow-hidden"
-                      : "bg-white rounded-xl shadow-md hover:shadow-lg border border-gray-100 overflow-hidden"
-                  }
-                >
-                  {/* Thumbnail */}
-                  {event.thumbnail && (
-                    <div className={isList ? "w-full h-32" : "w-full h-32"}>
-                      <Image
-                        src={event.thumbnail}
-                        alt={event.name}
-                        width={400}
-                        height={128}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
-
-                  {/* Event Content */}
-                  <div className="p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      {event.logo && (
-                        <div className="w-6 h-6 relative">
-                          <Image
-                            src={event.logo}
-                            alt={`${event.name} logo`}
-                            width={24}
-                            height={24}
-                            className="object-contain rounded-[15px]"
-                          />
-                        </div>
-                      )}
-                      <h3 className="font-semibold text-gray-900 text-sm flex-1 truncate">
-                        {event.name}
-                      </h3>
-                    </div>
-
-                    <span 
-                      className="inline-block px-2 py-1 rounded-full text-xs font-medium border mb-2"
-                      style={{ 
-                        backgroundColor: `${event.page_color || '#f59e0b'}15`,
-                        borderColor: event.page_color || '#f59e0b',
-                        color: event.page_color || '#f59e0b'
-                      }}
-                    >
-                      {event.type}
-                    </span>
-
-                    <p className="text-gray-600 text-xs line-clamp-2 mb-3">
-                      {event.description || "Join us for an amazing experience."}
-                    </p>
-
-                    <Link href={`/myevent/${event.id}`}>
-                      <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        className="w-full py-2 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-semibold rounded-lg transition-all duration-200"
-                      >
-                        View Event
-                      </motion.button>
-                    </Link>
-                  </div>
-                </motion.div>
+                <MobileEventCard 
+                  key={event.id} 
+                  event={event} 
+                  isList={isList} 
+                />
               ))}
             </div>
           )}

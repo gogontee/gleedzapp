@@ -16,8 +16,32 @@ import {
   DollarSign,
   Loader,
   MapPin,
-  Coins
+  Coins,
+  ChevronDown,
+  Mail,
+  Phone,
+  User,
+  Briefcase,
+  Heart,
+  Instagram,
+  Facebook,
+  Music,
+  AlertCircle,
+  Check
 } from "lucide-react";
+import Link from "next/link";
+
+// Nigerian states including FCT
+const NIGERIAN_STATES = [
+  "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno", 
+  "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "Federal Capital Territory (FCT)", 
+  "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", 
+  "Lagos", "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", 
+  "Sokoto", "Taraba", "Yobe", "Zamfara"
+];
+
+// Marital status options
+const MARITAL_STATUS = ["Single", "Married", "Divorced", "Widowed"];
 
 export default function CandidatesForm({ eventId, colors }) {
   const user = useUser();
@@ -42,17 +66,55 @@ export default function CandidatesForm({ eventId, colors }) {
     about: "",
     photo: "",
     banner: "",
-    location: "",
+    location: "", // Will store State of Origin
+    local_government: "", // New field for LGA
+    email: "",
+    whatsapp_number: "",
+    age: "",
+    occupation: "",
+    married: "",
+    instagram: "",
+    facebook: "",
+    tiktok: "",
     gallery: []
   });
   const [uploading, setUploading] = useState(false);
+  const [showStatesDropdown, setShowStatesDropdown] = useState(false);
+  const [lgas, setLgas] = useState([]);
+  const [showLgaDropdown, setShowLgaDropdown] = useState(false);
+  const [showMaritalDropdown, setShowMaritalDropdown] = useState(false);
+  const [nigeriaData, setNigeriaData] = useState([]);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [validationErrors, setValidationErrors] = useState({});
 
   useEffect(() => {
     checkOwnership();
     loadFormConfig();
     loadEvent();
     checkIfApplied();
+    loadNigeriaData();
   }, [eventId, user]);
+
+  // Load Nigeria data from Supabase - load ALL records
+  const loadNigeriaData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("nigeria")
+        .select("*");
+
+      if (error) {
+        console.error("Error loading Nigeria data:", error);
+        return;
+      }
+
+      if (data) {
+        setNigeriaData(data);
+        console.log("Nigeria data loaded:", data.length, "records");
+      }
+    } catch (error) {
+      console.error("Error loading Nigeria data:", error);
+    }
+  };
 
   const checkOwnership = async () => {
     if (!user) {
@@ -128,6 +190,152 @@ export default function CandidatesForm({ eventId, colors }) {
       console.error("Error checking application status:", error);
     }
   };
+
+  // Handle state selection
+  const handleStateSelect = async (state) => {
+    setCandidateData(prev => ({ 
+      ...prev, 
+      location: state,
+      local_government: "" // Reset LGA when state changes
+    }));
+    setShowStatesDropdown(false);
+    
+    // Query database for the selected state
+    if (nigeriaData.length > 0) {
+      // Find the state in the loaded data
+      const stateRecord = nigeriaData.find(item => 
+        item.state && item.state.toLowerCase() === state.toLowerCase()
+      );
+      
+      if (stateRecord && stateRecord.lga && Array.isArray(stateRecord.lga)) {
+        console.log(`Found LGAs for ${state}:`, stateRecord.lga);
+        setLgas(stateRecord.lga);
+      } else {
+        // If not found in loaded data, query the database directly
+        console.log(`State ${state} not found in loaded data, querying database...`);
+        await queryStateFromDatabase(state);
+      }
+    } else {
+      // If no data loaded yet, query the database
+      await queryStateFromDatabase(state);
+    }
+  };
+
+  // Helper function to query state from database
+  const queryStateFromDatabase = async (state) => {
+    try {
+      const { data, error } = await supabase
+        .from("nigeria")
+        .select("lga")
+        .eq("state", state)
+        .single();
+
+      if (error) {
+        console.error(`Error querying state ${state}:`, error);
+        setLgas([]);
+        return;
+      }
+
+      if (data && data.lga && Array.isArray(data.lga)) {
+        console.log(`Database query found LGAs for ${state}:`, data.lga);
+        setLgas(data.lga);
+      } else {
+        console.log(`No LGA data found for state: ${state}`);
+        setLgas([]);
+      }
+    } catch (error) {
+      console.error(`Error querying database for state ${state}:`, error);
+      setLgas([]);
+    }
+  };
+
+  // Handle LGA selection
+  const handleLgaSelect = (lga) => {
+    setCandidateData(prev => ({ ...prev, local_government: lga }));
+    setShowLgaDropdown(false);
+  };
+
+  // Handle marital status selection
+  const handleMaritalSelect = (status) => {
+    setCandidateData(prev => ({ ...prev, married: status }));
+    setShowMaritalDropdown(false);
+  };
+
+  // Validate form fields
+  const validateForm = () => {
+    const errors = {};
+    
+    // Required fields validation
+    if (!candidateData.full_name.trim()) {
+      errors.full_name = "Full name is required";
+    }
+    
+    if (!candidateData.email.trim()) {
+      errors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidateData.email)) {
+      errors.email = "Please enter a valid email address";
+    }
+    
+    if (!candidateData.whatsapp_number.trim()) {
+      errors.whatsapp_number = "WhatsApp number is required";
+    } else if (!/^[0-9+]{10,15}$/.test(candidateData.whatsapp_number.replace(/\s/g, ''))) {
+      errors.whatsapp_number = "Please enter a valid WhatsApp number";
+    }
+    
+    if (!candidateData.age.trim()) {
+      errors.age = "Age is required";
+    } else if (isNaN(candidateData.age) || parseInt(candidateData.age) < 18 || parseInt(candidateData.age) > 100) {
+      errors.age = "Please enter a valid age (18-100)";
+    }
+    
+    if (!candidateData.occupation.trim()) {
+      errors.occupation = "Occupation is required";
+    }
+    
+    if (!candidateData.married) {
+      errors.married = "Marital status is required";
+    }
+    
+    if (!candidateData.location) {
+      errors.location = "State of origin is required";
+    }
+    
+    if (candidateData.location && !candidateData.local_government) {
+      errors.local_government = "LGA is required";
+    }
+    
+    // Instagram encouragement (not required, but encouraged)
+    if (!candidateData.instagram.trim()) {
+      // This is just for encouragement, not an error
+    }
+    
+    if (!acceptedTerms) {
+      errors.terms = "You must accept the terms of use";
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showStatesDropdown && !event.target.closest('.state-dropdown-container')) {
+        setShowStatesDropdown(false);
+      }
+      if (showLgaDropdown && !event.target.closest('.lga-dropdown-container')) {
+        setShowLgaDropdown(false);
+      }
+      if (showMaritalDropdown && !event.target.closest('.marital-dropdown-container')) {
+        setShowMaritalDropdown(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [showStatesDropdown, showLgaDropdown, showMaritalDropdown]);
 
   const saveFormConfig = async () => {
     setSaving(true);
@@ -307,8 +515,8 @@ export default function CandidatesForm({ eventId, colors }) {
   };
 
   const submitCandidateForm = async () => {
-    if (!candidateData.full_name) {
-      alert("Full name is required");
+    if (!validateForm()) {
+      alert("Please fix the errors in the form before submitting.");
       return;
     }
 
@@ -362,6 +570,7 @@ export default function CandidatesForm({ eventId, colors }) {
           event_id: eventId,
           user_id: user.id,
           ...candidateData,
+          age: parseInt(candidateData.age),
           created_at: new Date().toISOString(),
         });
 
@@ -375,10 +584,21 @@ export default function CandidatesForm({ eventId, colors }) {
         photo: "",
         banner: "",
         location: "",
+        local_government: "",
+        email: "",
+        whatsapp_number: "",
+        age: "",
+        occupation: "",
+        married: "",
+        instagram: "",
+        facebook: "",
+        tiktok: "",
         gallery: []
       });
       setHasApplied(true);
+      setAcceptedTerms(false);
       setShowPaymentModal(false);
+      setValidationErrors({});
     } catch (error) {
       console.error("Error submitting candidate form:", error);
       alert("Error submitting application");
@@ -672,6 +892,12 @@ export default function CandidatesForm({ eventId, colors }) {
               }}
               placeholder="Enter your full name"
             />
+            {validationErrors.full_name && (
+              <p className="text-red-500 text-sm mt-1 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {validationErrors.full_name}
+              </p>
+            )}
           </div>
 
           {/* Nick Name */}
@@ -692,24 +918,347 @@ export default function CandidatesForm({ eventId, colors }) {
             />
           </div>
 
-          {/* Location */}
+          {/* Email */}
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: colors.text }}>
-              Location
+              Email Address *
             </label>
             <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
-                type="text"
-                value={candidateData.location}
-                onChange={(e) => setCandidateData(prev => ({ ...prev, location: e.target.value }))}
+                type="email"
+                value={candidateData.email}
+                onChange={(e) => setCandidateData(prev => ({ ...prev, email: e.target.value }))}
                 className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
                 style={{ 
                   borderColor: colors.border,
                   focusBorderColor: colors.primary 
                 }}
-                placeholder="Enter your location"
+                placeholder="you@example.com"
               />
+            </div>
+            {validationErrors.email && (
+              <p className="text-red-500 text-sm mt-1 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {validationErrors.email}
+              </p>
+            )}
+          </div>
+
+          {/* WhatsApp Number */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: colors.text }}>
+              WhatsApp Number *
+            </label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="tel"
+                value={candidateData.whatsapp_number}
+                onChange={(e) => setCandidateData(prev => ({ ...prev, whatsapp_number: e.target.value }))}
+                className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  borderColor: colors.border,
+                  focusBorderColor: colors.primary 
+                }}
+                placeholder="+234 800 000 0000"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1 flex items-center">
+              <AlertCircle className="w-3 h-3 mr-1" />
+              For communication with event management only. Not public.
+            </p>
+            {validationErrors.whatsapp_number && (
+              <p className="text-red-500 text-sm mt-1 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {validationErrors.whatsapp_number}
+              </p>
+            )}
+          </div>
+
+          {/* Age */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: colors.text }}>
+              Age *
+            </label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="number"
+                min="18"
+                max="100"
+                value={candidateData.age}
+                onChange={(e) => setCandidateData(prev => ({ ...prev, age: e.target.value }))}
+                className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  borderColor: colors.border,
+                  focusBorderColor: colors.primary 
+                }}
+                placeholder="Enter your age"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1 flex items-center">
+              <AlertCircle className="w-3 h-3 mr-1" />
+              Confidential. Not public.
+            </p>
+            {validationErrors.age && (
+              <p className="text-red-500 text-sm mt-1 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {validationErrors.age}
+              </p>
+            )}
+          </div>
+
+          {/* Occupation */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: colors.text }}>
+              Occupation *
+            </label>
+            <div className="relative">
+              <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={candidateData.occupation}
+                onChange={(e) => setCandidateData(prev => ({ ...prev, occupation: e.target.value }))}
+                className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                style={{ 
+                  borderColor: colors.border,
+                  focusBorderColor: colors.primary 
+                }}
+                placeholder="Your profession or occupation"
+              />
+            </div>
+            {validationErrors.occupation && (
+              <p className="text-red-500 text-sm mt-1 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {validationErrors.occupation}
+              </p>
+            )}
+          </div>
+
+          {/* Marital Status */}
+          <div className="relative marital-dropdown-container">
+            <label className="block text-sm font-medium mb-2" style={{ color: colors.text }}>
+              Marital Status *
+            </label>
+            <div 
+              className="w-full px-3 py-2 border rounded-lg cursor-pointer flex justify-between items-center"
+              style={{ 
+                borderColor: colors.border,
+              }}
+              onClick={() => setShowMaritalDropdown(!showMaritalDropdown)}
+            >
+              <div className="flex items-center">
+                <Heart className="w-4 h-4 mr-2 text-gray-400" />
+                <span className={candidateData.married ? "text-gray-900" : "text-gray-400"}>
+                  {candidateData.married || "Select marital status"}
+                </span>
+              </div>
+              <ChevronDown className={`w-4 h-4 transition-transform ${showMaritalDropdown ? "transform rotate-180" : ""}`} />
+            </div>
+            <p className="text-xs text-gray-500 mt-1 flex items-center">
+              <AlertCircle className="w-3 h-3 mr-1" />
+              Confidential. Not public.
+            </p>
+            
+            {showMaritalDropdown && (
+              <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                   style={{ borderColor: colors.border }}>
+                {MARITAL_STATUS.map((status) => (
+                  <div
+                    key={status}
+                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0 flex items-center"
+                    style={{ borderColor: colors.border }}
+                    onClick={() => handleMaritalSelect(status)}
+                  >
+                    <Heart className="w-4 h-4 mr-2 text-gray-400" />
+                    {status}
+                  </div>
+                ))}
+              </div>
+            )}
+            {validationErrors.married && (
+              <p className="text-red-500 text-sm mt-1 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {validationErrors.married}
+              </p>
+            )}
+          </div>
+
+          {/* State of Origin Dropdown */}
+          <div className="relative state-dropdown-container">
+            <label className="block text-sm font-medium mb-2" style={{ color: colors.text }}>
+              State of Origin *
+            </label>
+            <div 
+              className="w-full px-3 py-2 border rounded-lg cursor-pointer flex justify-between items-center"
+              style={{ 
+                borderColor: colors.border,
+              }}
+              onClick={() => setShowStatesDropdown(!showStatesDropdown)}
+            >
+              <div className="flex items-center">
+                <MapPin className="w-4 h-4 mr-2 text-gray-400" />
+                <span className={candidateData.location ? "text-gray-900" : "text-gray-400"}>
+                  {candidateData.location || "Select your state of origin"}
+                </span>
+              </div>
+              <ChevronDown className={`w-4 h-4 transition-transform ${showStatesDropdown ? "transform rotate-180" : ""}`} />
+            </div>
+            
+            {showStatesDropdown && (
+              <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                   style={{ borderColor: colors.border }}>
+                {NIGERIAN_STATES.map((state) => (
+                  <div
+                    key={state}
+                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
+                    style={{ borderColor: colors.border }}
+                    onClick={() => handleStateSelect(state)}
+                  >
+                    {state}
+                  </div>
+                ))}
+              </div>
+            )}
+            {validationErrors.location && (
+              <p className="text-red-500 text-sm mt-1 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-1" />
+                {validationErrors.location}
+              </p>
+            )}
+          </div>
+
+          {/* LGA Dropdown - Only shown when a state is selected */}
+          {candidateData.location && lgas.length > 0 && (
+            <div className="relative lga-dropdown-container">
+              <label className="block text-sm font-medium mb-2" style={{ color: colors.text }}>
+                Local Government Area (LGA) *
+              </label>
+              <div 
+                className="w-full px-3 py-2 border rounded-lg cursor-pointer flex justify-between items-center"
+                style={{ 
+                  borderColor: colors.border,
+                }}
+                onClick={() => setShowLgaDropdown(!showLgaDropdown)}
+              >
+                <span className={candidateData.local_government ? "text-gray-900" : "text-gray-400"}>
+                  {candidateData.local_government || `Select LGA in ${candidateData.location}`}
+                </span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${showLgaDropdown ? "transform rotate-180" : ""}`} />
+              </div>
+              
+              {showLgaDropdown && (
+                <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                     style={{ borderColor: colors.border }}>
+                  {lgas.map((lga) => (
+                    <div
+                      key={lga}
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
+                      style={{ borderColor: colors.border }}
+                      onClick={() => handleLgaSelect(lga)}
+                    >
+                      {lga}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {validationErrors.local_government && (
+                <p className="text-red-500 text-sm mt-1 flex items-center">
+                  <AlertCircle className="w-4 h-4 mr-1" />
+                  {validationErrors.local_government}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Show message if no LGAs found for selected state */}
+          {candidateData.location && lgas.length === 0 && (
+            <div className="text-sm text-orange-600">
+              No LGA data available for {candidateData.location}. The state may not exist in the database or has no LGA records.
+            </div>
+          )}
+
+          {/* Social Media Links */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold" style={{ color: colors.text }}>
+              Social Media Links (Optional)
+            </h3>
+            
+            {/* Instagram */}
+            <div>
+              <label className="block text-sm font-medium mb-2 flex items-center" style={{ color: colors.text }}>
+                <Instagram className="w-4 h-4 mr-2" />
+                Instagram
+                {!candidateData.instagram && (
+                  <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                    Recommended
+                  </span>
+                )}
+              </label>
+              <div className="relative">
+                <Instagram className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="url"
+                  value={candidateData.instagram}
+                  onChange={(e) => setCandidateData(prev => ({ ...prev, instagram: e.target.value }))}
+                  className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                  style={{ 
+                    borderColor: colors.border,
+                    focusBorderColor: colors.primary 
+                  }}
+                  placeholder="https://instagram.com/yourusername"
+                />
+              </div>
+              {!candidateData.instagram && (
+                <p className="text-amber-600 text-sm mt-1">
+                  Adding your Instagram link helps voters connect with you better!
+                </p>
+              )}
+            </div>
+
+            {/* Facebook */}
+            <div>
+              <label className="block text-sm font-medium mb-2 flex items-center" style={{ color: colors.text }}>
+                <Facebook className="w-4 h-4 mr-2" />
+                Facebook
+              </label>
+              <div className="relative">
+                <Facebook className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="url"
+                  value={candidateData.facebook}
+                  onChange={(e) => setCandidateData(prev => ({ ...prev, facebook: e.target.value }))}
+                  className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                  style={{ 
+                    borderColor: colors.border,
+                    focusBorderColor: colors.primary 
+                  }}
+                  placeholder="https://facebook.com/yourprofile"
+                />
+              </div>
+            </div>
+
+            {/* TikTok */}
+            <div>
+              <label className="block text-sm font-medium mb-2 flex items-center" style={{ color: colors.text }}>
+                <Music className="w-4 h-4 mr-2" />
+                TikTok
+              </label>
+              <div className="relative">
+                <Music className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="url"
+                  value={candidateData.tiktok}
+                  onChange={(e) => setCandidateData(prev => ({ ...prev, tiktok: e.target.value }))}
+                  className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                  style={{ 
+                    borderColor: colors.border,
+                    focusBorderColor: colors.primary 
+                  }}
+                  placeholder="https://tiktok.com/@yourusername"
+                />
+              </div>
             </div>
           </div>
 
@@ -841,11 +1390,48 @@ export default function CandidatesForm({ eventId, colors }) {
             )}
           </div>
 
+          {/* Terms and Conditions */}
+          <div className="pt-4">
+            <div className="flex items-start space-x-3 p-4 border rounded-lg" style={{ borderColor: colors.border }}>
+              <input
+                type="checkbox"
+                id="terms"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="mt-1 rounded"
+              />
+              <div>
+                <label htmlFor="terms" className="text-sm font-medium" style={{ color: colors.text }}>
+                  I accept the Terms of Use *
+                </label>
+                <p className="text-sm text-gray-600 mt-1">
+                  By checking this box, you agree to our{" "}
+                  <Link
+  href={`/myevent/${eventId}/terms`}
+  className="font-medium underline"
+  style={{ color: colors.primary }}
+  target="_blank"
+>
+  Terms of Use
+</Link>
+
+                  {" "}and confirm that all information provided is accurate and truthful.
+                </p>
+                {validationErrors.terms && (
+                  <p className="text-red-500 text-sm mt-1 flex items-center">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {validationErrors.terms}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Submit Button */}
           <div className="pt-6">
             <button
               onClick={submitCandidateForm}
-              disabled={saving || !candidateData.full_name || !user || hasApplied}
+              disabled={saving || !candidateData.full_name || !user || hasApplied || !acceptedTerms}
               className="w-full py-3 px-4 rounded-lg font-semibold text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg"
               style={{
                 backgroundColor: colors.primary,

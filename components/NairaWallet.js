@@ -59,6 +59,7 @@ export default function NairaWallet() {
     if (user?.id) {
       fetchTotalCount();
       fetchTransactions();
+      calculateBalance();
     }
   }, [user, filter, searchTerm, dateRange]);
 
@@ -141,7 +142,8 @@ export default function NairaWallet() {
       let query = supabase
         .from("fiat_transactions")
         .select("*", { count: "exact", head: true })
-        .eq("publisher_id", user.id);
+        .eq("publisher_id", user.id)
+        .eq("currency", "NGN");
 
       if (filter !== "all") {
         query = query.eq('status', filter);
@@ -168,6 +170,60 @@ export default function NairaWallet() {
     }
   };
 
+  // Calculate balance by querying all NGN transactions for the current user
+  const calculateBalance = async () => {
+    if (!user?.id) return;
+
+    try {
+      // Build query to get sum of amount and amount_out for NGN transactions
+      let query = supabase
+        .from("fiat_transactions")
+        .select("amount, amount_out, status")
+        .eq("publisher_id", user.id)
+        .eq("currency", "NGN")
+        .eq("status", "complete");
+
+      if (filter !== "all") {
+        query = query.eq('status', filter);
+      }
+
+      if (searchTerm) {
+        query = query.or(`description.ilike.%${searchTerm}%,guest_email.ilike.%${searchTerm}%,paystack_transaction_id.ilike.%${searchTerm}%`);
+      }
+
+      if (dateRange.start) {
+        query = query.gte('created_at', dateRange.start);
+      }
+      if (dateRange.end) {
+        query = query.lte('created_at', dateRange.end + 'T23:59:59');
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error("Error calculating balance:", error);
+        return;
+      }
+
+      if (data) {
+        // Calculate total amount in and total amount out
+        let totalAmountIn = 0;
+        let totalAmountOut = 0;
+        
+        data.forEach(transaction => {
+          totalAmountIn += transaction.amount || 0;
+          totalAmountOut += transaction.amount_out || 0;
+        });
+
+        // Balance = total amount in - total amount out
+        const calculatedBalance = totalAmountIn - totalAmountOut;
+        setBalance(calculatedBalance);
+      }
+    } catch (error) {
+      console.error("Error in calculateBalance:", error);
+    }
+  };
+
   const fetchTransactions = async () => {
     if (!user?.id) {
       setLoading(false);
@@ -183,6 +239,7 @@ export default function NairaWallet() {
         .from("fiat_transactions")
         .select("*")
         .eq("publisher_id", user.id)
+        .eq("currency", "NGN") // Filter for NGN transactions only
         .order("created_at", { ascending: false })
         .range(from, to);
 
@@ -210,7 +267,6 @@ export default function NairaWallet() {
         setTransactions(data || []);
         setHasMore(data.length === TRANSACTIONS_PER_PAGE);
         setPage(1);
-        calculateBalance(data || []);
       }
     } catch (err) {
       console.error("Error fetching transactions:", err);
@@ -233,6 +289,7 @@ export default function NairaWallet() {
         .from("fiat_transactions")
         .select("*")
         .eq("publisher_id", user.id)
+        .eq("currency", "NGN") // Filter for NGN transactions only
         .order("created_at", { ascending: false })
         .range(from, to);
 
@@ -272,19 +329,6 @@ export default function NairaWallet() {
     }
   };
 
-  const calculateBalance = (transactionsData) => {
-    const total = transactionsData.reduce((sum, transaction) => {
-      if (transaction.status === 'completed') {
-        const amountIn = transaction.amount || 0;
-        const amountOut = transaction.amount_out || 0;
-        return sum + (amountIn - amountOut);
-      }
-      return sum;
-    }, 0);
-
-    setBalance(total);
-  };
-
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed':
@@ -314,7 +358,7 @@ export default function NairaWallet() {
   };
 
   const exportToCSV = () => {
-    const headers = ['Transaction ID', 'Amount In', 'Amount Out', 'Description', 'Date', 'Sender', 'Status'];
+    const headers = ['Transaction ID', 'Amount In', 'Amount Out', 'Description', 'Date', 'Sender', 'Status', 'Currency'];
     const csvData = transactions.map(transaction => [
       transaction.paystack_transaction_id || 'N/A',
       transaction.amount || 0,
@@ -322,7 +366,8 @@ export default function NairaWallet() {
       transaction.description || '',
       formatDate(transaction.created_at),
       getSenderName(transaction),
-      transaction.status
+      transaction.status,
+      transaction.currency || 'NGN'
     ]);
 
     const csvContent = [
@@ -350,12 +395,13 @@ export default function NairaWallet() {
   };
 
   const refreshData = () => {
-  if (!user?.id) return;
-  
-  fetchTransactions();
-  calculateBalance(transactions); // Pass current transactions
-  fetchTotalCount();
-};
+    if (!user?.id) return;
+    
+    fetchTransactions();
+    calculateBalance();
+    fetchTotalCount();
+  };
+
   return (
     <div className="w-full max-w-6xl mx-auto space-y-4 px-2 sm:px-4">
       {/* Header */}
@@ -399,15 +445,23 @@ export default function NairaWallet() {
                   <p className="text-xs sm:text-sm font-medium text-gray-600">Naira Balance</p>
                   <p className="text-xl sm:text-3xl font-bold text-gray-900">{formatCurrency(balance)}</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {transactions.filter(t => t.status === 'completed').length} completed
+                    {transactions.filter(t => t.status === 'completed').length} completed NGN transactions
                   </p>
                 </div>
               </div>
               <div className="text-right">
-                <TrendingUp className="w-5 h-5 sm:w-8 sm:h-8 text-green-600 mx-auto mb-1" />
-                <p className="text-xs text-gray-600">Transactions</p>
+                <div className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium mb-1">
+                  NGN
+                </div>
+                <p className="text-xs text-gray-600">NGN Transactions</p>
                 <p className="text-xs text-gray-500">{totalCount} total</p>
               </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="text-xs text-gray-500">
+                Balance calculated from: (Total NGN Amount In) - (Total NGN Amount Out) 
+                excluding vat and 10% platform fees.
+              </p>
             </div>
           </motion.div>
 
@@ -421,7 +475,7 @@ export default function NairaWallet() {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3 sm:w-4 sm:h-4" />
                   <input
                     type="text"
-                    placeholder="Search transactions..."
+                    placeholder="Search NGN transactions..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent focus:ring-blue-500 text-sm"
@@ -485,20 +539,25 @@ export default function NairaWallet() {
           {/* Transactions Table */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-200">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900">Transaction History</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900">NGN Transaction History</h3>
+                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                  Currency: NGN
+                </span>
+              </div>
             </div>
 
             {loading ? (
               <div className="p-6 sm:p-8 text-center">
                 <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="text-gray-500 mt-2 text-sm">Loading transactions...</p>
+                <p className="text-gray-500 mt-2 text-sm">Loading NGN transactions...</p>
               </div>
             ) : transactions.length === 0 ? (
               <div className="p-6 sm:p-8 text-center">
                 <Wallet className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2" />
-                <p className="text-gray-500 text-sm">No transactions found</p>
+                <p className="text-gray-500 text-sm">No NGN transactions found</p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Your transactions will appear here
+                  Your NGN transactions will appear here
                 </p>
               </div>
             ) : (
@@ -605,7 +664,7 @@ export default function NairaWallet() {
                 {!hasMore && transactions.length > 0 && (
                   <div className="text-center mt-2 pb-4">
                     <p className="text-gray-500 text-xs">
-                      All transactions loaded
+                      All NGN transactions loaded
                     </p>
                   </div>
                 )}

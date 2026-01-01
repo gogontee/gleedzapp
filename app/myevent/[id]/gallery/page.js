@@ -18,13 +18,29 @@ export default function EventGalleryPage() {
   const [gallery, setGallery] = useState([]);
   const [videos, setVideos] = useState([]);
   const [heroSlides, setHeroSlides] = useState([]);
+  const [mobileHeroSlides, setMobileHeroSlides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [heroIndex, setHeroIndex] = useState(0);
+  const [mobileHeroIndex, setMobileHeroIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [selectedMediaIndex, setSelectedMediaIndex] = useState(null);
   const [viewMode, setViewMode] = useState('grid');
   const [contentType, setContentType] = useState('photos');
+  const [isMobile, setIsMobile] = useState(false);
   const heroTimerRef = useState(null);
+  const mobileHeroTimerRef = useState(null);
+
+  // Detect mobile on mount and resize
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     if (eventId) {
@@ -32,9 +48,9 @@ export default function EventGalleryPage() {
     }
   }, [eventId]);
 
-  // Hero slideshow auto-advance
+  // Hero slideshow auto-advance (desktop)
   useEffect(() => {
-    if (!isPlaying || heroSlides.length === 0) return;
+    if (!isPlaying || heroSlides.length === 0 || isMobile) return;
 
     const slide = heroSlides[heroIndex];
     if (!slide) return;
@@ -46,7 +62,23 @@ export default function EventGalleryPage() {
     }, 5000);
 
     return () => clearTimeout(heroTimerRef.current);
-  }, [heroIndex, heroSlides, isPlaying]);
+  }, [heroIndex, heroSlides, isPlaying, isMobile]);
+
+  // Mobile hero slideshow auto-advance
+  useEffect(() => {
+    if (!isPlaying || mobileHeroSlides.length === 0 || !isMobile) return;
+
+    const slide = mobileHeroSlides[mobileHeroIndex];
+    if (!slide) return;
+
+    clearTimeout(mobileHeroTimerRef.current);
+
+    mobileHeroTimerRef.current = setTimeout(() => {
+      setMobileHeroIndex((i) => (i + 1) % mobileHeroSlides.length);
+    }, 5000);
+
+    return () => clearTimeout(mobileHeroTimerRef.current);
+  }, [mobileHeroIndex, mobileHeroSlides, isPlaying, isMobile]);
 
   const fetchEventData = async () => {
     try {
@@ -54,7 +86,7 @@ export default function EventGalleryPage() {
       
       const { data: eventData, error } = await supabase
         .from("events")
-        .select("*, main_gallery, hero_sections, page_color, logo, name, videos")
+        .select("*, main_gallery, hero_sections, mobile_hero, page_color, logo, name, videos")
         .eq("id", eventId)
         .single();
 
@@ -70,8 +102,14 @@ export default function EventGalleryPage() {
         setVideos(eventData.videos);
       }
       
+      // Fetch desktop hero sections
       if (eventData.hero_sections && Array.isArray(eventData.hero_sections)) {
         setHeroSlides(eventData.hero_sections);
+      }
+      
+      // Fetch mobile hero sections
+      if (eventData.mobile_hero && Array.isArray(eventData.mobile_hero)) {
+        setMobileHeroSlides(eventData.mobile_hero);
       }
       
     } catch (error) {
@@ -82,11 +120,19 @@ export default function EventGalleryPage() {
   };
 
   const nextHeroSlide = () => {
-    setHeroIndex((i) => (i + 1) % heroSlides.length);
+    if (isMobile) {
+      setMobileHeroIndex((i) => (i + 1) % mobileHeroSlides.length);
+    } else {
+      setHeroIndex((i) => (i + 1) % heroSlides.length);
+    }
   };
 
   const prevHeroSlide = () => {
-    setHeroIndex((i) => (i - 1 + heroSlides.length) % heroSlides.length);
+    if (isMobile) {
+      setMobileHeroIndex((i) => (i - 1 + mobileHeroSlides.length) % mobileHeroSlides.length);
+    } else {
+      setHeroIndex((i) => (i - 1 + heroSlides.length) % heroSlides.length);
+    }
   };
 
   const openMediaViewer = (index) => {
@@ -162,6 +208,24 @@ export default function EventGalleryPage() {
     }
   };
 
+  // Get current slides based on device
+  const getCurrentSlides = () => {
+    if (isMobile && mobileHeroSlides.length > 0) {
+      return mobileHeroSlides;
+    }
+    return heroSlides;
+  };
+
+  const getCurrentIndex = () => {
+    if (isMobile && mobileHeroSlides.length > 0) {
+      return mobileHeroIndex;
+    }
+    return heroIndex;
+  };
+
+  const currentSlides = getCurrentSlides();
+  const currentIndex = getCurrentIndex();
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100">
@@ -187,7 +251,7 @@ export default function EventGalleryPage() {
   }
 
   const pageColor = event?.page_color || "#D4AF37";
-  const cardBgColor = `${pageColor}08`; // Very light version for card background
+  const cardBgColor = `${pageColor}08`;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 to-gray-100">
@@ -195,14 +259,14 @@ export default function EventGalleryPage() {
 
       <div className="pt-16">
         {/* Hero Section */}
-        {heroSlides.length > 0 && (
+        {currentSlides.length > 0 && (
           <section className="relative w-full h-[40vh] md:h-[50vh] overflow-hidden">
             <AnimatePresence mode="wait">
-              {heroSlides.map((slide, i) => {
-                if (i !== heroIndex) return null;
+              {currentSlides.map((slide, i) => {
+                if (i !== currentIndex) return null;
                 return (
                   <motion.div
-                    key={slide.id}
+                    key={slide.id || i}
                     className="absolute inset-0 w-full h-full"
                     initial={{ opacity: 0, scale: 1.1 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -232,24 +296,29 @@ export default function EventGalleryPage() {
                 transition={{ delay: 0.3, duration: 0.8 }}
               >
                 <h2 className="text-xl md:text-2xl font-bold mb-2 md:mb-3 leading-tight drop-shadow-2xl">
-                  {heroSlides[heroIndex]?.caption || "Event Gallery"}
+                  {currentSlides[currentIndex]?.caption || "Event Gallery"}
                 </h2>
-                {heroSlides[heroIndex]?.cta && (
+                {currentSlides[currentIndex]?.tagline && (
+                  <p className="text-base md:text-lg mb-3 md:mb-4 text-white/90 drop-shadow-2xl">
+                    {currentSlides[currentIndex].tagline}
+                  </p>
+                )}
+                {currentSlides[currentIndex]?.cta && (
                   <Link 
-                    href={heroSlides[heroIndex].cta.href} 
+                    href={currentSlides[currentIndex].cta.href} 
                     className="inline-flex px-4 py-2 text-white rounded-lg font-semibold shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 text-sm"
                     style={{ 
                       backgroundColor: pageColor,
                       boxShadow: `0 10px 15px -3px ${pageColor}40, 0 4px 6px -4px ${pageColor}40`
                     }}
                   >
-                    {heroSlides[heroIndex].cta.label}
+                    {currentSlides[currentIndex].cta.label}
                   </Link>
                 )}
               </motion.div>
             </div>
 
-            {heroSlides.length > 1 && (
+            {currentSlides.length > 1 && (
               <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2">
                 <button 
                   onClick={prevHeroSlide}
@@ -265,6 +334,11 @@ export default function EventGalleryPage() {
                 </button>
               </div>
             )}
+
+            {/* Device indicator (for debugging) */}
+            <div className="absolute top-4 left-4 z-20 px-2 py-1 rounded bg-black/50 text-white text-xs backdrop-blur-sm">
+              {isMobile ? 'Mobile' : 'Desktop'} Hero
+            </div>
           </section>
         )}
 
@@ -643,7 +717,7 @@ function InstagramMediaViewer({ gallery, currentIndex, onClose, onNavigate, page
                 className="text-gray-900 text-lg mb-4 leading-relaxed"
               >
                 {currentItem.caption}
-              </motion.p>
+            </motion.p>
             )}
 
             {/* Action Buttons */}
