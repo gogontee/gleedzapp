@@ -170,23 +170,11 @@ export default function RegisterPage() {
             </div>
 
             <h1
-              className="text-3xl font-bold mb-2 transition-colors duration-300"
+              className="text-3xl font-bold mb-6 transition-colors duration-300"
               style={{ color: currentColors.text }}
             >
               {event.title}
             </h1>
-            
-            {/* Updated Description Section */}
-            {event.tagline || event.description ? (
-              <div className="mb-6">
-                <p
-                  className="text-base font-normal transition-colors duration-300"
-                  style={{ color: currentColors.text }}
-                >
-                  {event.tagline || event.description}
-                </p>
-              </div>
-            ) : null}
 
             {/* Form Toggle */}
             <div className="flex space-x-1 p-1 rounded-lg bg-gray-100 max-w-md">

@@ -102,6 +102,7 @@ export default function HomeClient({ logoUrl, posters }) {
   const [loading, setLoading] = useState(true);
   const [heroSlides, setHeroSlides] = useState([]);
   const [currentHero, setCurrentHero] = useState(0);
+  const [direction, setDirection] = useState("right"); // Track slide direction
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [testimonials, setTestimonials] = useState([]);
   const [showTestimonialModal, setShowTestimonialModal] = useState(false);
@@ -113,12 +114,12 @@ export default function HomeClient({ logoUrl, posters }) {
   const [showLogoutDropdown, setShowLogoutDropdown] = useState(false);
   const dropdownRef = useRef(null);
   const [showPublisherModal, setShowPublisherModal] = useState(false);
+  const slideIntervalRef = useRef(null);
 
   // FIXED: Better cache busting that works with hydration
   const getCacheBustedUrl = (url, isClient = false) => {
     if (!url) return url;
     if (url.endsWith('.mp4') || url.includes('.mp4')) {
-      // Use a stable cache busting parameter that doesn't cause hydration mismatch
       return `${url}?v=1`; // Fixed version instead of timestamp
     }
     return url;
@@ -347,25 +348,70 @@ export default function HomeClient({ logoUrl, posters }) {
     fetchTopEvents();
   }, []);
 
-  // Auto change hero slides
+  // Auto change hero slides with slide animation and doubled duration (12 seconds)
   useEffect(() => {
     if (heroSlides.length === 0) return;
     
-    let interval;
+    const startSlideShow = () => {
+      slideIntervalRef.current = setInterval(() => {
+        setDirection("right");
+        setCurrentHero((prev) => (prev + 1) % heroSlides.length);
+      }, 12000); // Doubled from 6 seconds to 12 seconds
+    };
+
+    const stopSlideShow = () => {
+      if (slideIntervalRef.current) {
+        clearInterval(slideIntervalRef.current);
+        slideIntervalRef.current = null;
+      }
+    };
+
     const currentSlide = heroSlides[currentHero];
     
     if (currentSlide && currentSlide.type === "video") {
+      stopSlideShow();
       return;
     } else {
-      interval = setInterval(() => {
-        setCurrentHero((prev) => (prev + 1) % heroSlides.length);
-      }, 6000);
+      startSlideShow();
     }
     
     return () => {
-      if (interval) clearInterval(interval);
+      stopSlideShow();
     };
   }, [currentHero, heroSlides]);
+
+  // Handle slide navigation
+  const goToSlide = (index) => {
+    if (index === currentHero) return;
+    
+    setDirection(index > currentHero ? "right" : "left");
+    setCurrentHero(index);
+  };
+
+  // Handle next slide
+  const nextSlide = () => {
+    setDirection("right");
+    setCurrentHero((prev) => (prev + 1) % heroSlides.length);
+  };
+
+  // Handle previous slide
+  const prevSlide = () => {
+    setDirection("left");
+    setCurrentHero((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
+  };
+
+  // Handle hero slide click (image or video)
+  const handleHeroClick = (slide) => {
+    if (slide.cta && slide.cta.href) {
+      router.push(slide.cta.href);
+    }
+  };
+
+  // Handle video end for hero slides
+  const handleVideoEnd = () => {
+    setDirection("right");
+    setCurrentHero((prev) => (prev + 1) % heroSlides.length);
+  };
 
   // Updated poster rotation logic
   useEffect(() => {
@@ -409,11 +455,6 @@ export default function HomeClient({ logoUrl, posters }) {
       if (timer) clearTimeout(timer);
     };
   }, [currentPoster, posters]);
-
-  // Handle video end for hero slides
-  const handleVideoEnd = () => {
-    setCurrentHero((prev) => (prev + 1) % heroSlides.length);
-  };
 
   // Handle event tab click
   const handleEventTabClick = (tab) => {
@@ -745,53 +786,151 @@ export default function HomeClient({ logoUrl, posters }) {
 
       {/* Hero Section */}
       <section className="relative w-full flex items-center justify-center overflow-hidden rounded-b-[2rem] shadow-xl bg-black">
-        <div className="w-full aspect-[2/1] md:aspect-auto md:h-[70vh]">
-          <AnimatePresence mode="wait">
-            {heroSlides.map((slide, idx) =>
-              idx === currentHero ? (
-                slide.type === "video" ? (
-                  <motion.video
-  key={idx}
-  src={getCacheBustedUrl(slide.src)}
-  autoPlay
-  playsInline
-  className="absolute inset-0 w-full h-full object-cover"
-  initial={{ opacity: 0 }}
-  animate={{ opacity: 1 }}
-  exit={{ opacity: 0 }}
-  transition={{ duration: 1 }}
-  onEnded={handleVideoEnd}
-  onError={(e) => {
-    console.error('Video failed to load:', slide.src);
-    handleVideoEnd();
-  }}
-/>
+        <div className="w-full aspect-[2/1] md:aspect-auto md:h-[70vh] overflow-hidden relative">
+          {heroSlides.map((slide, idx) => {
+            const isActive = idx === currentHero;
+            const isPrev = idx === (currentHero - 1 + heroSlides.length) % heroSlides.length;
+            const isNext = idx === (currentHero + 1) % heroSlides.length;
+            
+            let xPosition = "100%";
+            if (isActive) xPosition = "0%";
+            else if (isPrev) xPosition = "-100%";
+            
+            return (
+              <motion.div
+                key={idx}
+                className="absolute inset-0 w-full h-full cursor-pointer"
+                initial={false}
+                animate={{ 
+                  x: xPosition,
+                  transition: {
+                    duration: 1,
+                    ease: "easeInOut"
+                  }
+                }}
+                onClick={() => handleHeroClick(slide)}
+              >
+                {slide.type === "video" ? (
+                  <video
+                    src={getCacheBustedUrl(slide.src)}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="absolute inset-0 w-full h-full object-cover"
+                    onEnded={handleVideoEnd}
+                    onError={(e) => {
+                      console.error('Video failed to load:', slide.src);
+                      handleVideoEnd();
+                    }}
+                  />
                 ) : (
-                  <motion.div
-                    key={idx}
-                    className="absolute inset-0 w-full h-full"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 1 }}
-                  >
+                  <div className="absolute inset-0 w-full h-full">
                     <Image
                       src={slide.src}
                       alt={`Hero ${idx}`}
                       fill
                       className="object-cover"
                       unoptimized
+                      priority={isActive}
                     />
+                  </div>
+                )}
+                
+                {/* CTA Overlay - Always visible on active slide */}
+                {isActive && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 40 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5, duration: 0.8 }}
+                    className="absolute bottom-6 md:bottom-10 left-1/2 transform -translate-x-1/2 text-center text-white px-4 z-20 w-full max-w-xs md:max-w-none"
+                  >
+                    {slide.caption && (
+                      <h2 className="text-xs md:text-xl lg:text-2xl font-bold drop-shadow-lg mb-1 md:mb-2 px-2">
+                        {slide.caption}
+                      </h2>
+                    )}
+                    
+                    {slide.tagline && (
+                      <p className="text-xs md:text-base lg:text-lg drop-shadow-lg mb-2 md:mb-3 px-2">
+                        {slide.tagline}
+                      </p>
+                    )}
+                    
+                    {slide.cta && slide.cta.label && (
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (slide.cta && slide.cta.href) {
+                            router.push(slide.cta.href);
+                          }
+                        }}
+                        className="inline-block px-3 py-1 md:px-4 md:py-2 bg-yellow-600 hover:bg-yellow-700 rounded-full shadow-lg font-semibold transition text-xs md:text-sm cursor-pointer"
+                      >
+                        {slide.cta.label}
+                      </div>
+                    )}
                   </motion.div>
-                )
-              ) : null
-            )}
-          </AnimatePresence>
+                )}
+              </motion.div>
+            );
+          })}
+          
+          {/* Navigation Dots */}
+          {heroSlides.length > 1 && (
+            <div className="absolute bottom-20 md:bottom-24 left-1/2 transform -translate-x-1/2 flex gap-2 z-30">
+              {heroSlides.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goToSlide(idx);
+                  }}
+                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                    idx === currentHero 
+                      ? 'bg-yellow-500 scale-125' 
+                      : 'bg-white/50 hover:bg-white/80'
+                  }`}
+                  aria-label={`Go to slide ${idx + 1}`}
+                />
+              ))}
+            </div>
+          )}
+          
+          {/* Navigation Arrows */}
+          {heroSlides.length > 1 && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  prevSlide();
+                }}
+                className="absolute left-4 top-1/2 transform -translate-y-1/2 z-30 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full transition-all duration-200 hidden md:block"
+                aria-label="Previous slide"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  nextSlide();
+                }}
+                className="absolute right-4 top-1/2 transform -translate-y-1/2 z-30 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full transition-all duration-200 hidden md:block"
+                aria-label="Next slide"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Top Bar */}
-        <div className="absolute top-3 md:top-4 left-3 md:left-4 right-3 md:right-4 flex items-center justify-between z-20">
-          {/* Logo - FIXED: Added priority prop */}
+        <div className="absolute top-3 md:top-4 left-3 md:left-4 right-3 md:right-4 flex items-center justify-between z-40">
+          {/* Logo */}
           {logoUrl ? (
             <div className="relative w-15 h-8 md:w-20 md:h-10">
               <Image
@@ -800,7 +939,7 @@ export default function HomeClient({ logoUrl, posters }) {
                 fill
                 className="rounded-lg object-contain"
                 unoptimized
-                priority // FIXED: Added priority for LCP
+                priority
               />
             </div>
           ) : (
@@ -896,43 +1035,6 @@ export default function HomeClient({ logoUrl, posters }) {
             </div>
           </div>
         </div>
-
-        {/* Call to Action */}
-        <AnimatePresence mode="wait">
-          {heroSlides.map((slide, idx) =>
-            idx === currentHero ? (
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 40 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -40 }}
-                transition={{ duration: 0.8 }}
-                className="absolute bottom-6 md:bottom-10 left-1/2 transform -translate-x-1/2 text-center text-white px-4 z-20 w-full max-w-xs md:max-w-none"
-              >
-                {slide.caption && (
-                  <h2 className="text-xs md:text-xl lg:text-2xl font-bold drop-shadow-lg mb-1 md:mb-2 px-2">
-                    {slide.caption}
-                  </h2>
-                )}
-                
-                {slide.tagline && (
-                  <p className="text-xs md:text-base lg:text-lg drop-shadow-lg mb-2 md:mb-3 px-2">
-                    {slide.tagline}
-                  </p>
-                )}
-                
-                {slide.cta && slide.cta.label && (
-                  <Link
-                    href={slide.cta.href || "#"}
-                    className="inline-block px-3 py-1 md:px-4 md:py-2 bg-yellow-600 hover:bg-yellow-700 rounded-full shadow-lg font-semibold transition text-xs md:text-sm"
-                  >
-                    {slide.cta.label}
-                  </Link>
-                )}
-              </motion.div>
-            ) : null
-          )}
-        </AnimatePresence>
       </section>
 
       {/* Text below hero with Social Media Icons */}
@@ -992,11 +1094,11 @@ export default function HomeClient({ logoUrl, posters }) {
               All Event
             </motion.button>
 
-            {/* Poster Display - FIXED: Added proper positioning for fill images */}
+            {/* Poster Display */}
             {posters.length > 0 && (
               <div className="mt-0">
                 <h3 className="text-white font-semibold mb-2 text-sm">Featured Poster</h3>
-                <div className="w-full aspect-[4/8] rounded-xl overflow-hidden shadow-xl bg-gray-900 relative"> {/* FIXED: Added relative */}
+                <div className="w-full aspect-[4/8] rounded-xl overflow-hidden shadow-xl bg-gray-900 relative">
                   {posters.map((poster, idx) => {
                     if (idx !== currentPoster) return null;
                     const isVideo = poster.url.endsWith(".mp4");
@@ -1022,7 +1124,7 @@ export default function HomeClient({ logoUrl, posters }) {
                             }}
                           />
                         ) : (
-                          <div className="relative w-full h-full"> {/* FIXED: Added relative container */}
+                          <div className="relative w-full h-full">
                             <Image
                               src={poster.url}
                               alt={poster.name}
@@ -1062,7 +1164,7 @@ export default function HomeClient({ logoUrl, posters }) {
             </div>
           </div>
 
-          {/* Top Events Section - FIXED: All images have proper positioning */}
+          {/* Top Events Section */}
           <section className="mt-8 md:mt-10">
             <h2 className="text-xl md:text-2xl lg:text-3xl font-bold mb-4 md:mb-6 text-yellow-800">
               Top Events
@@ -1086,7 +1188,7 @@ export default function HomeClient({ logoUrl, posters }) {
                     whileHover={{ scale: 1.03 }}
                     className="glass rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 border border-gray-200"
                   >
-                    {/* Event Banner - FIXED: Added relative container */}
+                    {/* Event Banner */}
                     {event.thumbnail && (
                       <div className="relative h-32 md:h-40 lg:h-48 w-full">
                         <Image
@@ -1116,10 +1218,10 @@ export default function HomeClient({ logoUrl, posters }) {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-  <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-1 line-clamp-1 md:line-clamp-none md:whitespace-normal md:break-words">
-    {event.name}
-  </h3>
-</div>
+                            <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-1 line-clamp-1 md:line-clamp-none md:whitespace-normal md:break-words">
+                              {event.name}
+                            </h3>
+                          </div>
                         </div>
                       </div>
 
@@ -1129,14 +1231,14 @@ export default function HomeClient({ logoUrl, posters }) {
 
                       <div className="flex items-center justify-between">
                         <Link href={`/myevent/${event.id}`}>
-                          <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="px-4 py-1.5 md:px-6 md:py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg text-sm md:text-base"
-                          >
-                            View Event
-                          </motion.button>
-                        </Link>
+  <motion.button
+    whileHover={{ scale: 1.05 }}
+    whileTap={{ scale: 0.95 }}
+    className="px-3 py-1 md:px-6 md:py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg text-xs md:text-base"
+  >
+    View Event
+  </motion.button>
+</Link>
                         
                         <span 
                           className="inline-block px-2 py-1 rounded-full text-xs font-semibold border"
@@ -1199,7 +1301,7 @@ export default function HomeClient({ logoUrl, posters }) {
             </div>
           </section>
 
-          {/* Testimonials - FIXED: All avatar images have proper positioning */}
+          {/* Testimonials */}
           <section className="mt-12 md:mt-16">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 md:mb-8 gap-3">
               <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-yellow-800">
