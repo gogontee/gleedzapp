@@ -5,32 +5,32 @@ import { supabase } from "../lib/supabaseClient";
 import { useRouter } from 'next/navigation';
 
 export default function HeroManagerModal({ isOpen, onClose }) {
-  const [heroData, setHeroData] = useState([]);
+  const [heroes, setHeroes] = useState([]); // Array of hero records
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
     if (isOpen) {
-      fetchHeroData();
+      fetchHeroes();
     }
   }, [isOpen]);
 
-  const fetchHeroData = async () => {
+  // Fetch all hero records
+  const fetchHeroes = async () => {
     try {
       const { data, error } = await supabase
         .from('gleedz_hero')
-        .select('hero, id')
-        .order('id', { ascending: true })
-        .limit(1)
-        .single();
+        .select('*')
+        .order('created_at', { ascending: true });
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
       
-      setHeroData(data?.hero || []);
+      setHeroes(data || []);
     } catch (error) {
-      console.error('Error fetching hero data:', error);
+      console.error('Error fetching heroes:', error);
       alert('Error loading hero data');
     } finally {
       setLoading(false);
@@ -45,7 +45,6 @@ export default function HeroManagerModal({ isOpen, onClose }) {
       const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
       const filePath = `heros/${fileName}`;
 
-      // Upload image to Supabase Storage :cite[2]:cite[7]
       const { data, error } = await supabase.storage
         .from('heros')
         .upload(filePath, file, {
@@ -55,7 +54,6 @@ export default function HeroManagerModal({ isOpen, onClose }) {
 
       if (error) throw error;
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('heros')
         .getPublicUrl(filePath);
@@ -70,10 +68,9 @@ export default function HeroManagerModal({ isOpen, onClose }) {
     }
   };
 
-  const handleImageUpload = async (index, file) => {
+  const handleImageUpload = async (id, index, file) => {
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file');
       return;
@@ -81,86 +78,195 @@ export default function HeroManagerModal({ isOpen, onClose }) {
 
     const imageUrl = await uploadImage(file);
     if (imageUrl) {
-      updateHeroSection(index, 'src', imageUrl);
+      updateHeroField(id, index, 'src', imageUrl);
     }
   };
 
-  const saveHeroData = async () => {
+  // Save a single hero record (insert or update)
+  const saveHero = async (hero) => {
     try {
       setSaving(true);
       
-      // Check if record exists
-      const { data: existingData } = await supabase
-        .from('gleedz_hero')
-        .select('id')
-        .limit(1);
-
       let result;
-
-      if (existingData && existingData.length > 0) {
+      
+      if (hero.id) {
         // Update existing record
         result = await supabase
           .from('gleedz_hero')
-          .update({ hero: heroData })
-          .eq('id', existingData[0].id);
+          .update({
+            hero: hero.hero,
+            desktop_posters: hero.desktop_posters || null,
+            mobile_poster: hero.mobile_poster || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', hero.id);
       } else {
         // Insert new record
         result = await supabase
           .from('gleedz_hero')
-          .insert([{ hero: heroData }]);
+          .insert([{
+            hero: hero.hero,
+            desktop_posters: hero.desktop_posters || null,
+            mobile_poster: hero.mobile_poster || null
+          }])
+          .select(); // Return the inserted data
       }
 
       if (result.error) throw result.error;
 
-      alert('Hero data saved successfully!');
-      onClose();
-      router.refresh(); // Refresh the page to show changes
+      return result.data?.[0];
     } catch (error) {
-      console.error('Error saving hero data:', error);
-      alert('Error saving hero data: ' + error.message);
+      console.error('Error saving hero:', error);
+      alert('Error saving hero: ' + error.message);
+      return null;
     } finally {
       setSaving(false);
     }
   };
 
-  const addHeroSection = () => {
+  // Delete a hero record
+  const deleteHero = async (id) => {
+    if (!confirm('Are you sure you want to delete this hero section permanently?')) {
+      return;
+    }
+
+    try {
+      setDeletingId(id);
+      
+      const { error } = await supabase
+        .from('gleedz_hero')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Remove from local state
+      setHeroes(prev => prev.filter(hero => hero.id !== id));
+      
+      alert('Hero section deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting hero:', error);
+      alert('Error deleting hero: ' + error.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const addNewHero = async () => {
     const newHero = {
-      src: '',
-      heading: 'New Hero Section',
-      button: { label: 'Learn More', href: '/' }
+      id: null, // Will be set by database
+      hero: [{
+        src: '',
+        heading: 'New Hero Section',
+        button: { label: 'Learn More', href: '/' }
+      }],
+      desktop_posters: null,
+      mobile_poster: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
-    setHeroData([...heroData, newHero]);
-  };
 
-  const removeHeroSection = (index) => {
-    if (confirm('Are you sure you want to remove this hero section?')) {
-      const updatedHero = heroData.filter((_, i) => i !== index);
-      setHeroData(updatedHero);
+    // Save to database first
+    const savedHero = await saveHero(newHero);
+    
+    if (savedHero) {
+      // Add to local state with real ID from database
+      setHeroes(prev => [...prev, savedHero]);
     }
   };
 
-  const updateHeroSection = (index, field, value) => {
-    const updatedHero = [...heroData];
-    
-    if (field.startsWith('button.')) {
-      const buttonField = field.split('.')[1];
-      if (!updatedHero[index].button) {
-        updatedHero[index].button = {};
+  const updateHeroField = (id, heroIndex, field, value) => {
+    setHeroes(prev => prev.map(hero => {
+      if (hero.id === id) {
+        const updatedHero = { ...hero };
+        const heroSections = [...updatedHero.hero];
+        
+        if (field.startsWith('button.')) {
+          const buttonField = field.split('.')[1];
+          if (!heroSections[heroIndex].button) {
+            heroSections[heroIndex].button = {};
+          }
+          heroSections[heroIndex].button[buttonField] = value;
+        } else {
+          heroSections[heroIndex][field] = value;
+        }
+        
+        updatedHero.hero = heroSections;
+        updatedHero.updated_at = new Date().toISOString();
+        
+        return updatedHero;
       }
-      updatedHero[index].button[buttonField] = value;
-    } else {
-      updatedHero[index][field] = value;
-    }
-    
-    setHeroData(updatedHero);
+      return hero;
+    }));
   };
 
-  const moveSection = (index, direction) => {
+  const addHeroSection = (heroId) => {
+    setHeroes(prev => prev.map(hero => {
+      if (hero.id === heroId) {
+        const newHeroSection = {
+          src: '',
+          heading: 'New Hero Section',
+          button: { label: 'Learn More', href: '/' }
+        };
+        return {
+          ...hero,
+          hero: [...hero.hero, newHeroSection],
+          updated_at: new Date().toISOString()
+        };
+      }
+      return hero;
+    }));
+  };
+
+  const removeHeroSection = (heroId, index) => {
+    if (confirm('Are you sure you want to remove this hero section?')) {
+      setHeroes(prev => prev.map(hero => {
+        if (hero.id === heroId) {
+          const updatedSections = hero.hero.filter((_, i) => i !== index);
+          return {
+            ...hero,
+            hero: updatedSections,
+            updated_at: new Date().toISOString()
+          };
+        }
+        return hero;
+      }));
+    }
+  };
+
+  const moveSection = (heroId, index, direction) => {
     const newIndex = index + direction;
-    if (newIndex >= 0 && newIndex < heroData.length) {
-      const updatedHero = [...heroData];
-      [updatedHero[index], updatedHero[newIndex]] = [updatedHero[newIndex], updatedHero[index]];
-      setHeroData(updatedHero);
+    setHeroes(prev => prev.map(hero => {
+      if (hero.id === heroId && hero.hero.length > newIndex && newIndex >= 0) {
+        const sections = [...hero.hero];
+        [sections[index], sections[newIndex]] = [sections[newIndex], sections[index]];
+        return {
+          ...hero,
+          hero: sections,
+          updated_at: new Date().toISOString()
+        };
+      }
+      return hero;
+    }));
+  };
+
+  // Save all changes
+  const saveAllChanges = async () => {
+    try {
+      setSaving(true);
+      
+      // Save each hero that has been modified
+      const savePromises = heroes.map(hero => saveHero(hero));
+      await Promise.all(savePromises);
+      
+      alert('All changes saved successfully!');
+      onClose();
+      router.refresh();
+    } catch (error) {
+      console.error('Error saving all changes:', error);
+      alert('Error saving changes: ' + error.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -178,7 +284,7 @@ export default function HeroManagerModal({ isOpen, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="bg-yellow-500 text-white p-6 rounded-t-xl">
           <div className="flex justify-between items-center">
@@ -190,19 +296,24 @@ export default function HeroManagerModal({ isOpen, onClose }) {
               ×
             </button>
           </div>
-          <p className="text-yellow-100 mt-2">Add, edit, or remove hero sections. Drag and reorder sections as needed.</p>
+          <p className="text-yellow-100 mt-2">
+            Manage multiple hero sections. Each section can have multiple slides.
+          </p>
         </div>
 
         {/* Content */}
         <div className="p-6">
           {/* Action Buttons */}
           <div className="flex justify-between items-center mb-6">
-            <button
-              onClick={addHeroSection}
-              className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center"
-            >
-              <span className="mr-2">+</span> Add Hero Section
-            </button>
+            <div className="flex space-x-2">
+              <button
+                onClick={addNewHero}
+                disabled={saving}
+                className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 flex items-center"
+              >
+                <span className="mr-2">+</span> Add New Hero Section
+              </button>
+            </div>
             
             <div className="flex space-x-2">
               <button
@@ -212,152 +323,185 @@ export default function HeroManagerModal({ isOpen, onClose }) {
                 Cancel
               </button>
               <button
-                onClick={saveHeroData}
+                onClick={saveAllChanges}
                 disabled={saving}
                 className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors disabled:opacity-50"
               >
-                {saving ? 'Saving...' : 'Save Changes'}
+                {saving ? 'Saving...' : 'Save All Changes'}
               </button>
             </div>
           </div>
 
-          {/* Hero Sections List */}
-          <div className="space-y-6">
-            {heroData.map((section, index) => (
-              <div key={index} className="border border-yellow-300 rounded-lg p-6 bg-yellow-50">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-yellow-800">
-                    Hero Section {index + 1}
-                  </h3>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => moveSection(index, -1)}
-                      disabled={index === 0}
-                      className="text-yellow-600 hover:text-yellow-800 disabled:opacity-30"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      onClick={() => moveSection(index, 1)}
-                      disabled={index === heroData.length - 1}
-                      className="text-yellow-600 hover:text-yellow-800 disabled:opacity-30"
-                    >
-                      ↓
-                    </button>
-                    <button
-                      onClick={() => removeHeroSection(index)}
-                      className="text-red-500 hover:text-red-700 font-semibold"
-                    >
-                      Remove
-                    </button>
+          {/* Heroes List */}
+          <div className="space-y-8">
+            {heroes.map((hero) => (
+              <div key={hero.id} className="border-2 border-yellow-400 rounded-xl p-6 bg-yellow-50">
+                {/* Hero Header */}
+                <div className="flex justify-between items-center mb-6 pb-4 border-b border-yellow-300">
+                  <div>
+                    <h3 className="text-xl font-bold text-yellow-800">
+                      Hero ID: {hero.id}
+                    </h3>
+                    <div className="text-sm text-yellow-600 mt-1">
+                      Created: {new Date(hero.created_at).toLocaleDateString()} | 
+                      Updated: {new Date(hero.updated_at).toLocaleDateString()}
+                    </div>
                   </div>
+                  <button
+                    onClick={() => deleteHero(hero.id)}
+                    disabled={deletingId === hero.id}
+                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors disabled:opacity-50"
+                  >
+                    {deletingId === hero.id ? 'Deleting...' : 'Delete Hero'}
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Image Upload Section */}
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-yellow-700 mb-2">
-                        Hero Image *
-                      </label>
-                      
-                      {/* Image Preview */}
-                      {section.src && (
-                        <div className="mb-3">
-                          <img
-                            src={section.src}
-                            alt="Preview"
-                            className="w-full h-48 object-cover rounded-lg border border-yellow-300"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                            }}
-                          />
+                {/* Slides for this Hero */}
+                <div className="space-y-6">
+                  {hero.hero.map((section, index) => (
+                    <div key={index} className="border border-yellow-300 rounded-lg p-6 bg-white">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-lg font-semibold text-yellow-800">
+                          Slide {index + 1}
+                        </h4>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => moveSection(hero.id, index, -1)}
+                            disabled={index === 0}
+                            className="text-yellow-600 hover:text-yellow-800 disabled:opacity-30 px-2"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            onClick={() => moveSection(hero.id, index, 1)}
+                            disabled={index === hero.hero.length - 1}
+                            className="text-yellow-600 hover:text-yellow-800 disabled:opacity-30 px-2"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            onClick={() => removeHeroSection(hero.id, index)}
+                            className="text-red-500 hover:text-red-700 font-semibold"
+                          >
+                            Remove Slide
+                          </button>
                         </div>
-                      )}
-                      
-                      {/* File Upload */}
-                      <div className="flex flex-col space-y-2">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleImageUpload(index, e.target.files[0])}
-                          className="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100"
-                          disabled={uploading}
-                        />
-                        {uploading && (
-                          <div className="text-yellow-600 text-sm">Uploading image...</div>
-                        )}
                       </div>
-                      
-                      {/* URL Fallback */}
-                      <div className="mt-2">
-                        <label className="block text-sm font-medium text-yellow-700 mb-1">
-                          Or enter image URL
-                        </label>
-                        <input
-                          type="text"
-                          value={section.src}
-                          onChange={(e) => updateHeroSection(index, 'src', e.target.value)}
-                          className="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
-                          placeholder="https://example.com/image.jpg"
-                        />
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Content Section */}
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-yellow-700 mb-1">
-                        Heading *
-                      </label>
-                      <input
-                        type="text"
-                        value={section.heading}
-                        onChange={(e) => updateHeroSection(index, 'heading', e.target.value)}
-                        className="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
-                        placeholder="Enter compelling heading"
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-yellow-700 mb-1">
-                          Button Label *
-                        </label>
-                        <input
-                          type="text"
-                          value={section.button?.label || ''}
-                          onChange={(e) => updateHeroSection(index, 'button.label', e.target.value)}
-                          className="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
-                          placeholder="Button text"
-                        />
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Image Upload Section */}
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-yellow-700 mb-2">
+                              Hero Image *
+                            </label>
+                            
+                            {section.src && (
+                              <div className="mb-3">
+                                <img
+                                  src={section.src}
+                                  alt="Preview"
+                                  className="w-full h-48 object-cover rounded-lg border border-yellow-300"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                  }}
+                                />
+                              </div>
+                            )}
+                            
+                            <div className="flex flex-col space-y-2">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleImageUpload(hero.id, index, e.target.files[0])}
+                                className="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100"
+                                disabled={uploading}
+                              />
+                              {uploading && (
+                                <div className="text-yellow-600 text-sm">Uploading image...</div>
+                              )}
+                            </div>
+                            
+                            <div className="mt-2">
+                              <label className="block text-sm font-medium text-yellow-700 mb-1">
+                                Or enter image URL
+                              </label>
+                              <input
+                                type="text"
+                                value={section.src || ''}
+                                onChange={(e) => updateHeroField(hero.id, index, 'src', e.target.value)}
+                                className="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
+                                placeholder="https://example.com/image.jpg"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Content Section */}
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-yellow-700 mb-1">
+                              Heading *
+                            </label>
+                            <input
+                              type="text"
+                              value={section.heading || ''}
+                              onChange={(e) => updateHeroField(hero.id, index, 'heading', e.target.value)}
+                              className="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
+                              placeholder="Enter compelling heading"
+                            />
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-yellow-700 mb-1">
+                                Button Label *
+                              </label>
+                              <input
+                                type="text"
+                                value={section.button?.label || ''}
+                                onChange={(e) => updateHeroField(hero.id, index, 'button.label', e.target.value)}
+                                className="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
+                                placeholder="Button text"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-yellow-700 mb-1">
+                                Button Link *
+                              </label>
+                              <input
+                                type="text"
+                                value={section.button?.href || ''}
+                                onChange={(e) => updateHeroField(hero.id, index, 'button.href', e.target.value)}
+                                className="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
+                                placeholder="/path"
+                              />
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-yellow-700 mb-1">
-                          Button Link *
-                        </label>
-                        <input
-                          type="text"
-                          value={section.button?.href || ''}
-                          onChange={(e) => updateHeroSection(index, 'button.href', e.target.value)}
-                          className="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
-                          placeholder="/path"
-                        />
-                      </div>
                     </div>
-                  </div>
+                  ))}
+                  
+                  {/* Add Slide Button */}
+                  <button
+                    onClick={() => addHeroSection(hero.id)}
+                    className="w-full border-2 border-dashed border-yellow-400 text-yellow-600 hover:text-yellow-800 hover:border-yellow-500 rounded-lg p-4 text-center transition-colors"
+                  >
+                    + Add Slide to This Hero
+                  </button>
                 </div>
               </div>
             ))}
             
-            {heroData.length === 0 && (
+            {heroes.length === 0 && (
               <div className="text-center py-12 border-2 border-dashed border-yellow-300 rounded-lg bg-yellow-25">
                 <div className="text-yellow-600 mb-4">No hero sections yet.</div>
                 <button
-                  onClick={addHeroSection}
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+                  onClick={addNewHero}
+                  disabled={saving}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50"
                 >
                   Create Your First Hero Section
                 </button>
