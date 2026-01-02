@@ -98,6 +98,8 @@ export default function HomeClient({ logoUrl, posters }) {
   const router = useRouter();
   const [session, setSession] = useState(null);
   const [userData, setUserData] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [userId, setUserId] = useState(null);
   const [topEvents, setTopEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [heroSlides, setHeroSlides] = useState([]);
@@ -116,6 +118,7 @@ export default function HomeClient({ logoUrl, posters }) {
   const [showPublisherModal, setShowPublisherModal] = useState(false);
   const slideIntervalRef = useRef(null);
   const [isHeroHovered, setIsHeroHovered] = useState(false);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
 
   // FIXED: Better cache busting that works with hydration
   const getCacheBustedUrl = (url, isClient = false) => {
@@ -225,58 +228,207 @@ export default function HomeClient({ logoUrl, posters }) {
     fetchHeroSlides();
   }, []);
 
+  // ✅ PROPERLY Get current user and check role in both users table and specific role tables
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const fetchUserData = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-
-      if (session) {
-        const { data: user } = await supabase
-          .from("users")
-          .select("id, role")
-          .eq("id", session.user.id)
-          .single();
-
-        if (user.role === "publisher") {
-          const { data: publisher } = await supabase
-            .from("publishers")
-            .select("id, avatar_url, name")
-            .eq("id", user.id)
+    const getCurrentUser = async () => {
+      setLoading(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          setUserId(user.id);
+          
+          // First check the users table for role
+          const { data: userProfile, error: userError } = await supabase
+            .from('users')
+            .select('id, role, email')
+            .eq('id', user.id)
             .single();
-          setUserData({ ...user, ...publisher });
-        } else if (user.role === "fans") {
-          const { data: fan } = await supabase
-            .from("fans")
-            .select("id, avatar_url, full_name")
-            .eq("id", user.id)
-            .single();
-          setUserData({ ...user, ...fan });
-        } else if (user.role === "admin") {
-          const { data: admin } = await supabase
-            .from("admins")
-            .select("id, avatar_url, full_name")
-            .eq("id", user.id)
-            .single();
-          setUserData({ ...user, ...admin });
+
+          if (userProfile && !userError) {
+            setSession({ user: { id: userProfile.id, email: userProfile.email } });
+            setUserRole(userProfile.role);
+            
+            // Set userData based on role
+            if (userProfile.role === 'publisher') {
+              const { data: publisherData } = await supabase
+                .from('publishers')
+                .select('id, avatar_url, name as full_name')
+                .eq('id', user.id)
+                .single();
+              
+              if (publisherData) {
+                setUserData({ 
+                  id: user.id, 
+                  email: userProfile.email, 
+                  role: userProfile.role,
+                  full_name: publisherData.full_name || userProfile.email,
+                  avatar_url: publisherData.avatar_url 
+                });
+              } else {
+                console.warn('User marked as publisher but not found in publishers table');
+                setUserData({ 
+                  id: user.id, 
+                  email: userProfile.email, 
+                  role: userProfile.role,
+                  full_name: userProfile.email,
+                  avatar_url: null 
+                });
+              }
+            }
+            // If user is fan, verify they exist in fans table
+            else if (userProfile.role === 'fans') {
+              const { data: fanData } = await supabase
+                .from('fans')
+                .select('id, avatar_url, full_name')
+                .eq('id', user.id)
+                .single();
+              
+              if (fanData) {
+                setUserData({ 
+                  id: user.id, 
+                  email: userProfile.email, 
+                  role: userProfile.role,
+                  full_name: fanData.full_name || userProfile.email,
+                  avatar_url: fanData.avatar_url 
+                });
+              } else {
+                console.warn('User marked as fan but not found in fans table');
+                setUserData({ 
+                  id: user.id, 
+                  email: userProfile.email, 
+                  role: userProfile.role,
+                  full_name: userProfile.email,
+                  avatar_url: null 
+                });
+              }
+            }
+            else if (userProfile.role === 'admin') {
+              const { data: adminData } = await supabase
+                .from('admins')
+                .select('id, avatar_url, full_name')
+                .eq('id', user.id)
+                .single();
+
+              if (adminData) {
+                setUserData({ 
+                  id: user.id, 
+                  email: userProfile.email, 
+                  role: userProfile.role,
+                  full_name: adminData.full_name || userProfile.email,
+                  avatar_url: adminData.avatar_url 
+                });
+              } else {
+                setUserData({ 
+                  id: user.id, 
+                  email: userProfile.email, 
+                  role: userProfile.role,
+                  full_name: userProfile.email,
+                  avatar_url: null 
+                });
+              }
+            }
+          } else {
+            // User not found in users table, check if they exist in publishers or fans table
+            const { data: publisherData } = await supabase
+              .from('publishers')
+              .select('id, email, avatar_url, name as full_name')
+              .eq('id', user.id)
+              .single();
+
+            if (publisherData) {
+              setSession({ user: { id: publisherData.id, email: publisherData.email } });
+              setUserRole('publisher');
+              setUserData({ 
+                id: publisherData.id, 
+                email: publisherData.email, 
+                role: 'publisher',
+                full_name: publisherData.full_name || publisherData.email,
+                avatar_url: publisherData.avatar_url 
+              });
+            } else {
+              const { data: fanData } = await supabase
+                .from('fans')
+                .select('id, email, avatar_url, full_name')
+                .eq('id', user.id)
+                .single();
+
+              if (fanData) {
+                setSession({ user: { id: fanData.id, email: fanData.email } });
+                setUserRole('fans');
+                setUserData({ 
+                  id: fanData.id, 
+                  email: fanData.email, 
+                  role: 'fans',
+                  full_name: fanData.full_name || fanData.email,
+                  avatar_url: fanData.avatar_url 
+                });
+              } else {
+                const { data: adminData } = await supabase
+                  .from('admins')
+                  .select('id, email, avatar_url, full_name')
+                  .eq('id', user.id)
+                  .single();
+
+                if (adminData) {
+                  setSession({ user: { id: adminData.id, email: adminData.email } });
+                  setUserRole('admin');
+                  setUserData({ 
+                    id: adminData.id, 
+                    email: adminData.email, 
+                    role: 'admin',
+                    full_name: adminData.full_name || adminData.email,
+                    avatar_url: adminData.avatar_url 
+                  });
+                } else {
+                  // User not found in any table, set default as fan
+                  setSession({ user: { id: user.id, email: user.email } });
+                  setUserRole('fans');
+                  setUserData({ 
+                    id: user.id, 
+                    email: user.email, 
+                    role: 'fans',
+                    full_name: user.email,
+                    avatar_url: null 
+                  });
+                }
+              }
+            }
+          }
+        } else {
+          setSession(null);
+          setUserData(null);
+          setUserRole(null);
+          setUserId(null);
         }
+      } catch (error) {
+        console.error('Error fetching user:', error);
+        setSession(null);
+        setUserData(null);
+        setUserRole(null);
+        setUserId(null);
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchUserData();
+    getCurrentUser();
+
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          getCurrentUser(); // Refresh user data when signed in
+        } else if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setUserData(null);
+          setUserRole(null);
+          setUserId(null);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // Fetch top events
@@ -441,6 +593,8 @@ export default function HomeClient({ logoUrl, posters }) {
       
       setSession(null);
       setUserData(null);
+      setUserRole(null);
+      setUserId(null);
       setShowLogoutDropdown(false);
       router.refresh();
       
@@ -467,21 +621,57 @@ export default function HomeClient({ logoUrl, posters }) {
     setShowPublisherModal(false);
   };
 
+  // ✅ UPDATED: Handle Dashboard button click with proper role-based routing
   const handleDashboardClick = () => {
-    if (!session) {
-      setShowLoginModal(true);
+    if (dashboardLoading) {
+      console.log('Dashboard click: Still loading...');
       return;
     }
 
-    if (userData?.role === "publisher") {
-      router.push(`/publisherdashboard/${userData.id}`);
-    } else if (userData?.role === "fans") {
-      router.push(`/fansdashboard/${userData.id}`);
-    } else if (userData?.role === "admin") {
-      router.push(`/admindashboard/${userData.id}`);
-    } else {
+    setDashboardLoading(true);
+
+    console.log('Dashboard clicked');
+    console.log('Session:', session);
+    console.log('User ID:', userId);
+    console.log('User Role:', userRole);
+    console.log('User Data:', userData);
+
+    // Case 1: User not logged in - show login modal
+    if (!session) {
+      console.log('User not logged in - showing login modal');
       setShowLoginModal(true);
+      setDashboardLoading(false);
+      return;
     }
+
+    // Case 2: User is publisher - redirect to publisher dashboard
+    if (userRole === 'publisher') {
+      console.log('User is publisher - redirecting to publisher dashboard');
+      router.push(`/publisherdashboard/${userId || userData?.id}`);
+      setDashboardLoading(false);
+      return;
+    }
+
+    // Case 3: User is fan - redirect to fan dashboard
+    if (userRole === 'fans') {
+      console.log('User is fan - redirecting to fan dashboard');
+      router.push(`/fansdashboard/${userId || userData?.id}`);
+      setDashboardLoading(false);
+      return;
+    }
+
+    // Case 4: User is admin - redirect to admin dashboard
+    if (userRole === 'admin') {
+      console.log('User is admin - redirecting to admin dashboard');
+      router.push(`/admindashboard/${userId || userData?.id}`);
+      setDashboardLoading(false);
+      return;
+    }
+
+    // Case 5: Unknown role - default to login modal
+    console.log('Unknown user role - showing login modal');
+    setShowLoginModal(true);
+    setDashboardLoading(false);
   };
 
   const handleProceedToLogin = () => {
@@ -593,7 +783,7 @@ export default function HomeClient({ logoUrl, posters }) {
               </div>
               
               <p className="text-gray-600 mb-6">
-                You need to login to your dashboard to publish events. Would you like to proceed to login?
+                You need to login to access your dashboard. Would you like to proceed to login?
               </p>
               
               <div className="flex gap-3">
@@ -992,6 +1182,9 @@ export default function HomeClient({ logoUrl, posters }) {
                           <p className="text-xs text-gray-500 truncate">
                             {session.user.email}
                           </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Role: {userRole || "Unknown"}
+                          </p>
                         </div>
                       </div>
                       
@@ -1057,9 +1250,10 @@ export default function HomeClient({ logoUrl, posters }) {
             <motion.button
               whileHover={{ scale: 1.05 }}
               onClick={handleDashboardClick}
-              className="w-full bg-yellow-500 text-white py-3 px-4 rounded-2xl shadow-lg font-semibold tracking-wide text-sm"
+              disabled={dashboardLoading}
+              className="w-full bg-yellow-500 text-white py-3 px-4 rounded-2xl shadow-lg font-semibold tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Dashboard
+              {dashboardLoading ? 'Loading...' : 'Dashboard'}
             </motion.button>
 
             <motion.button
@@ -1370,10 +1564,13 @@ export default function HomeClient({ logoUrl, posters }) {
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={handleDashboardClick}
-            className="flex flex-col items-center gap-1 p-2 text-yellow-700"
+            disabled={dashboardLoading}
+            className="flex flex-col items-center gap-1 p-2 text-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Layout size={20} />
-            <span className="text-xs font-medium">Dashboard</span>
+            <span className="text-xs font-medium">
+              {dashboardLoading ? 'Loading...' : 'Dashboard'}
+            </span>
           </motion.button>
 
           <motion.button
