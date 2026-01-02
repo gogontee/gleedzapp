@@ -115,6 +115,7 @@ export default function HomeClient({ logoUrl, posters }) {
   const dropdownRef = useRef(null);
   const [showPublisherModal, setShowPublisherModal] = useState(false);
   const slideIntervalRef = useRef(null);
+  const [isHeroHovered, setIsHeroHovered] = useState(false);
 
   // FIXED: Better cache busting that works with hydration
   const getCacheBustedUrl = (url, isClient = false) => {
@@ -175,88 +176,48 @@ export default function HomeClient({ logoUrl, posters }) {
 
         if (error) {
           console.error("Error fetching hero slides:", error);
-          // Fallback to default slides if error
+          // SIMPLE FALLBACK: Single slide with welcome message
           setHeroSlides([
-            {
-              src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero5.jpg",
-              type: "image",
-              caption: "Publish your event on Gleedz",
-              tagline: "Create amazing events with our platform",
-              cta: { label: "Create Event", href: "/create-event" },
-            },
             {
               src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero7.jpg",
               type: "image",
-              caption: "Explore Top Events",
-              tagline: "Discover the best events around you",
+              caption: "Welcome to Gleedz",
+              tagline: "Home of premium events",
               cta: { label: "Explore Events", href: "/events" },
-            },
-            {
-              src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero4.jpg",
-              type: "image",
-              caption: "Get your premium tickets now",
-              tagline: "Secure your spot at exclusive events",
-              cta: { label: "Buy Tickets", href: "/tickets" },
-            },
+            }
           ]);
           return;
         }
 
-        if (data && data.hero) {
+        if (data && data.hero && Array.isArray(data.hero) && data.hero.length > 0) {
           const transformedSlides = data.hero.map(slide => ({
             ...slide,
             isVideo: slide.type === "video"
           }));
           setHeroSlides(transformedSlides);
         } else {
+          // SIMPLE FALLBACK: Single slide with welcome message
           setHeroSlides([
-            {
-              src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero5.jpg",
-              type: "image",
-              caption: "Publish your event on Gleedz",
-              tagline: "Create amazing events with our platform",
-              cta: { label: "Create Event", href: "/create-event" },
-            },
             {
               src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero7.jpg",
               type: "image",
-              caption: "Explore Top Events",
-              tagline: "Discover the best events around you",
+              caption: "Welcome to Gleedz",
+              tagline: "Home of premium events",
               cta: { label: "Explore Events", href: "/events" },
-            },
-            {
-              src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero4.jpg",
-              type: "image",
-              caption: "Get your premium tickets now",
-              tagline: "Secure your spot at exclusive events",
-              cta: { label: "Buy Tickets", href: "/tickets" },
-            },
+            }
           ]);
         }
       } catch (error) {
         console.error("Error fetching hero slides:", error);
+        // SIMPLE FALLBACK: Single slide with welcome message
         setHeroSlides([
-          {
-            src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero5.jpg",
-            type: "image",
-            caption: "Publish your event on Gleedz",
-            tagline: "Create amazing events with our platform",
-            cta: { label: "Create Event", href: "/create-event" },
-          },
           {
             src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero7.jpg",
             type: "image",
-            caption: "Explore Top Events",
-            tagline: "Discover the best events around you",
+            caption: "Welcome to Gleedz",
+            tagline: "Home of premium events",
             cta: { label: "Explore Events", href: "/events" },
-          },
-          {
-            src: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/heros/hero4.jpg",
-            type: "image",
-            caption: "Get your premium tickets now",
-            tagline: "Secure your spot at exclusive events",
-            cta: { label: "Buy Tickets", href: "/tickets" },
-          },
+          }
         ]);
       }
     };
@@ -785,7 +746,11 @@ export default function HomeClient({ logoUrl, posters }) {
       </AnimatePresence>
 
       {/* Hero Section */}
-      <section className="relative w-full flex items-center justify-center overflow-hidden rounded-b-[2rem] shadow-xl bg-black">
+      <section 
+        className="relative w-full flex items-center justify-center overflow-hidden rounded-b-[2rem] shadow-xl bg-black"
+        onMouseEnter={() => setIsHeroHovered(true)}
+        onMouseLeave={() => setIsHeroHovered(false)}
+      >
         <div className="w-full aspect-[2/1] md:aspect-auto md:h-[70vh] overflow-hidden relative">
           {heroSlides.map((slide, idx) => {
             const isActive = idx === currentHero;
@@ -875,9 +840,14 @@ export default function HomeClient({ logoUrl, posters }) {
             );
           })}
           
-          {/* Navigation Dots */}
+          {/* Navigation Dots - Visible only on hover */}
           {heroSlides.length > 1 && (
-            <div className="absolute bottom-20 md:bottom-24 left-1/2 transform -translate-x-1/2 flex gap-2 z-30">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: isHeroHovered ? 1 : 0 }}
+              transition={{ duration: 0.3 }}
+              className="absolute bottom-20 md:bottom-24 left-1/2 transform -translate-x-1/2 flex gap-2 z-30"
+            >
               {heroSlides.map((_, idx) => (
                 <button
                   key={idx}
@@ -893,13 +863,16 @@ export default function HomeClient({ logoUrl, posters }) {
                   aria-label={`Go to slide ${idx + 1}`}
                 />
               ))}
-            </div>
+            </motion.div>
           )}
           
           {/* Navigation Arrows */}
           {heroSlides.length > 1 && (
             <>
-              <button
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: isHeroHovered ? 1 : 0 }}
+                transition={{ duration: 0.3 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   prevSlide();
@@ -910,9 +883,12 @@ export default function HomeClient({ logoUrl, posters }) {
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-              </button>
+              </motion.button>
               
-              <button
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: isHeroHovered ? 1 : 0 }}
+                transition={{ duration: 0.3 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   nextSlide();
@@ -923,7 +899,7 @@ export default function HomeClient({ logoUrl, posters }) {
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
-              </button>
+              </motion.button>
             </>
           )}
         </div>
@@ -1231,25 +1207,25 @@ export default function HomeClient({ logoUrl, posters }) {
 
                       <div className="flex items-center justify-between">
                         <Link href={`/myevent/${event.id}`}>
-  <motion.button
-    whileHover={{ scale: 1.05 }}
-    whileTap={{ scale: 0.95 }}
-    className="px-3 py-1 md:px-6 md:py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg text-xs md:text-base"
-  >
-    View
-  </motion.button>
-</Link>
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="px-3 py-1 md:px-6 md:py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg text-xs md:text-base"
+                          >
+                            View
+                          </motion.button>
+                        </Link>
                         
                         <span 
-  className="inline-block px-2 py-1 rounded-full text-[10px] md:text-xs font-semibold border"
-  style={{ 
-    backgroundColor: `${event.page_color || '#f59e0b'}15`,
-    borderColor: event.page_color || '#f59e0b',
-    color: event.page_color || '#f59e0b'
-  }}
->
-  {event.type}
-</span>
+                          className="inline-block px-2 py-1 rounded-full text-[10px] md:text-xs font-semibold border"
+                          style={{ 
+                            backgroundColor: `${event.page_color || '#f59e0b'}15`,
+                            borderColor: event.page_color || '#f59e0b',
+                            color: event.page_color || '#f59e0b'
+                          }}
+                        >
+                          {event.type}
+                        </span>
                       </div>
                     </div>
                   </motion.div>
