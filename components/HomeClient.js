@@ -1241,15 +1241,15 @@ export default function HomeClient({ logoUrl, posters }) {
 </Link>
                         
                         <span 
-                          className="inline-block px-2 py-1 rounded-full text-xs font-semibold border"
-                          style={{ 
-                            backgroundColor: `${event.page_color || '#f59e0b'}15`,
-                            borderColor: event.page_color || '#f59e0b',
-                            color: event.page_color || '#f59e0b'
-                          }}
-                        >
-                          {event.type}
-                        </span>
+  className="inline-block px-2 py-1 rounded-full text-[10px] md:text-xs font-semibold border"
+  style={{ 
+    backgroundColor: `${event.page_color || '#f59e0b'}15`,
+    borderColor: event.page_color || '#f59e0b',
+    color: event.page_color || '#f59e0b'
+  }}
+>
+  {event.type}
+</span>
                       </div>
                     </div>
                   </motion.div>

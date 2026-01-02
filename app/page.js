@@ -6,20 +6,13 @@ import { supabase } from "../lib/supabaseClient";
 import HomeClient from "../components/HomeClient";
 import { X, LogIn, UserPlus, Star, Gift, Users, Trophy } from "lucide-react";
 
-const posterUrls = [
-  "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/posters/poster.mp4",
-  "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/posters/poster1.mp4",
-  "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/posters/poster2.jpg",
-  "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/posters/missuniverse.jpg",
-  "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/posters/1002.mp4",
-  "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/posters/poster4.mp4",
-];
-
 export default function HomePage() {
   const router = useRouter();
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [session, setSession] = useState(null);
   const [timeOnPage, setTimeOnPage] = useState(0);
+  const [posters, setPosters] = useState([]);
+  const [loadingPosters, setLoadingPosters] = useState(true);
   
   const authTimerRef = useRef(null);
   const pageTimerRef = useRef(null);
@@ -30,13 +23,52 @@ export default function HomePage() {
   const logoUrl =
     "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/assets/gleedlogo.png";
 
-  // build poster objects with hrefs
-  const posters = posterUrls.map((url, index) => ({
-    name: `poster${index + 1}`,
-    url,
-    href: `/poster/poster${index + 1}`, // each poster gets a unique link
-    autoplay: url.endsWith(".mp4"), // optional flag for autoplay in HomeClient
-  }));
+  // Fetch posters from gleedz_hero.desktop_posters
+  useEffect(() => {
+    const fetchPosters = async () => {
+      try {
+        console.log("🔄 Fetching posters from gleedz_hero.desktop_posters...");
+        
+        const { data, error } = await supabase
+          .from("gleedz_hero")
+          .select("desktop_posters")
+          .single();
+
+        if (error) {
+          console.error("❌ Error fetching posters:", error);
+          // Fallback to empty array
+          setPosters([]);
+          return;
+        }
+
+        if (data && data.desktop_posters && Array.isArray(data.desktop_posters)) {
+          console.log("✅ Posters data loaded:", data.desktop_posters);
+          
+          // Transform the data to match HomeClient format
+          const transformedPosters = data.desktop_posters.map((poster, index) => ({
+            name: `poster${index + 1}`,
+            url: poster.src,
+            href: poster.button?.href || "/events", // Use button href if available
+            autoplay: poster.type === "video",
+            type: poster.type // Keep type for reference
+          }));
+          
+          setPosters(transformedPosters);
+          console.log("🔄 Transformed posters:", transformedPosters);
+        } else {
+          console.log("⚠️ No desktop_posters found or invalid format");
+          setPosters([]);
+        }
+      } catch (error) {
+        console.error("❌ Error loading posters:", error);
+        setPosters([]);
+      } finally {
+        setLoadingPosters(false);
+      }
+    };
+
+    fetchPosters();
+  }, []);
 
   useEffect(() => {
     // Check if user is authenticated
@@ -147,6 +179,18 @@ export default function HomePage() {
     }
     return `${secs}s`;
   };
+
+  // Show loading state while fetching posters
+  if (loadingPosters) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gold-50 via-white to-gold-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading content...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
