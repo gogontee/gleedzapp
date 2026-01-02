@@ -219,11 +219,6 @@ export default function PosterShowcaseMobile() {
           ))}
         </div>
       )}
-
-      {/* Show current poster number (optional) */}
-      <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded z-10">
-        {current + 1} / {posters.length}
-      </div>
     </div>
   );
 }

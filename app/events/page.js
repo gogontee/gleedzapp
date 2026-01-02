@@ -85,7 +85,7 @@ export default function EventsPage() {
     return words.slice(0, wordLimit).join(' ') + '...';
   };
 
-  // Navigation items - Fixed dashboard link
+  // Navigation items - Fixed dashboard link (Desktop only)
   const navItems = [
     { href: "/", label: "Home", icon: Home },
     { href: "/events", label: "Events", icon: Calendar },
@@ -541,31 +541,11 @@ export default function EventsPage() {
         </div>
       </div>
 
-      {/* ✅ Mobile Layout */}
+      {/* ✅ Mobile Layout - NAVIGATION REMOVED */}
       <div className="md:hidden">
-        {/* Header for Mobile */}
+        {/* Header for Mobile - NO NAVIGATION */}
         <div className="bg-white border-b border-gray-200 px-4 py-4">
-          {/* Mobile Navigation */}
-          <nav className="flex justify-center gap-4 mb-4">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all duration-200 ${
-                    isActive
-                      ? "bg-yellow-500 text-white"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  <Icon size={16} />
-                  <span className="text-xs font-medium">{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+          {/* REMOVED: Mobile Navigation Section */}
 
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-2xl font-bold text-gray-900">All Events</h1>

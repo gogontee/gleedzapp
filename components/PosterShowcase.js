@@ -17,10 +17,14 @@ export default function PosterShowcase() {
     const fetchPosters = async () => {
       try {
         setLoading(true);
+        console.log("Fetching posters from Supabase...");
+        
         const { data, error } = await supabase
           .from("gleedz_hero")
           .select("desktop_posters")
           .single();
+
+        console.log("Supabase response:", { data, error });
 
         if (error) {
           console.error("Error fetching posters:", error);
@@ -30,17 +34,57 @@ export default function PosterShowcase() {
           return;
         }
 
-        if (data && data.desktop_posters && Array.isArray(data.desktop_posters)) {
-          // Transform the data to match our component structure
-          const transformedPosters = data.desktop_posters.map((poster, index) => ({
-            name: `poster-${index}`,
-            url: poster.src,
-            href: poster.button?.href || "/events", // Default to /events if no href
-            type: poster.type || "image", // Default to image if no type
-          }));
-          setPosters(transformedPosters);
+        if (data && data.desktop_posters) {
+          console.log("Raw desktop_posters data:", data.desktop_posters);
+          
+          // Check if desktop_posters is a string that needs parsing
+          let postersArray = data.desktop_posters;
+          
+          if (typeof postersArray === 'string') {
+            try {
+              postersArray = JSON.parse(postersArray);
+            } catch (parseError) {
+              console.error("Error parsing JSON:", parseError);
+              setError("Invalid posters data format");
+              setPosters(getFallbackPosters());
+              return;
+            }
+          }
+          
+          // Ensure it's an array
+          if (Array.isArray(postersArray) && postersArray.length > 0) {
+            console.log("Processed posters array:", postersArray);
+            
+            // Transform the data to match our component structure
+            const transformedPosters = postersArray.map((poster, index) => {
+              console.log(`Poster ${index}:`, poster);
+              
+              // Check for different possible structures
+              const posterData = {
+                name: `poster-${index}`,
+                url: poster.src || poster.url || poster.image || "",
+                href: poster.button?.href || poster.href || "/events",
+                type: poster.type || "image",
+              };
+              
+              console.log(`Transformed poster ${index}:`, posterData);
+              return posterData;
+            }).filter(poster => poster.url); // Filter out posters without URLs
+            
+            console.log("Final transformed posters:", transformedPosters);
+            
+            if (transformedPosters.length > 0) {
+              setPosters(transformedPosters);
+            } else {
+              console.log("No valid posters found, using fallback");
+              setPosters(getFallbackPosters());
+            }
+          } else {
+            console.log("Invalid posters data format or empty array, using fallback");
+            setPosters(getFallbackPosters());
+          }
         } else {
-          // If no posters found, use a fallback
+          console.log("No data found, using fallback");
           setPosters(getFallbackPosters());
         }
       } catch (err) {
@@ -97,6 +141,12 @@ export default function PosterShowcase() {
     return url;
   };
 
+  // Add debug logging for rendering
+  console.log("Rendering with posters:", posters);
+  console.log("Current poster index:", current);
+  console.log("Loading:", loading);
+  console.log("Error:", error);
+
   if (loading) {
     return (
       <div className="hidden md:block w-full h-full relative bg-black">
@@ -127,53 +177,55 @@ export default function PosterShowcase() {
     );
   }
 
+  const currentPoster = posters[current];
+  console.log("Current poster to render:", currentPoster);
+
   return (
     <div className="hidden md:block w-full h-full relative bg-black">
       <AnimatePresence mode="wait">
-        {posters.map(
-          (poster, index) =>
-            index === current && (
-              <motion.div
-                key={`${poster.name}-${index}`}
-                className="absolute inset-0 w-full h-full"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 1 }}
+        <motion.div
+          key={`${currentPoster.name}-${current}`}
+          className="absolute inset-0 w-full h-full"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 1 }}
+        >
+          <Link href={currentPoster.href} className="block w-full h-full">
+            {currentPoster.type === "video" ? (
+              <video
+                key={currentPoster.url}
+                className="w-full h-full object-cover"
+                autoPlay
+                muted
+                playsInline
+                onEnded={handleVideoEnd}
+                onError={(e) => {
+                  console.error('Video failed to load:', currentPoster.url, e);
+                  handleVideoEnd();
+                }}
               >
-                <Link href={poster.href} className="block w-full h-full">
-                  {poster.type === "video" ? (
-                    <video
-                      key={poster.url}
-                      className="w-full h-full object-cover"
-                      autoPlay
-                      muted
-                      playsInline
-                      onEnded={handleVideoEnd}
-                      onError={(e) => {
-                        console.error('Video failed to load:', poster.url);
-                        handleVideoEnd();
-                      }}
-                    >
-                      <source src={getCacheBustedUrl(poster.url)} type="video/mp4" />
-                    </video>
-                  ) : (
-                    <div className="relative w-full h-full">
-                      <Image
-                        src={poster.url}
-                        alt={poster.name}
-                        fill
-                        className="object-cover"
-                        priority={index === 0}
-                        sizes="100vw"
-                        unoptimized
-                      />
-                    </div>
-                  )}
-                </Link>
-              </motion.div>
-            )
-        )}
+                <source src={getCacheBustedUrl(currentPoster.url)} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              <div className="relative w-full h-full">
+                <Image
+                  src={currentPoster.url}
+                  alt={currentPoster.name}
+                  fill
+                  className="object-cover"
+                  priority={current === 0}
+                  sizes="100vw"
+                  unoptimized
+                  onError={(e) => {
+                    console.error('Image failed to load:', currentPoster.url);
+                  }}
+                />
+              </div>
+            )}
+          </Link>
+        </motion.div>
       </AnimatePresence>
 
       {/* Optional: Navigation dots */}
