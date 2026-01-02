@@ -1234,9 +1234,9 @@ export default function HomeClient({ logoUrl, posters }) {
   <motion.button
     whileHover={{ scale: 1.05 }}
     whileTap={{ scale: 0.95 }}
-    className="px-3 py-1 md:px-6 md:py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg text-xxs md:text-base"
+    className="px-3 py-1 md:px-6 md:py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg text-xs md:text-base"
   >
-    View Event
+    View
   </motion.button>
 </Link>
                         
