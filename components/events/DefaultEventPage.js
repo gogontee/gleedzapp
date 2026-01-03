@@ -13,7 +13,7 @@ import {
   PoundSterling, Key, Target, Car, Key as KeyIcon, Images, Download,
   Image as ImageIcon, Video, Music, Mic, Camera, Flag, Globe, Lock,
   Unlock, Settings, User, Users as UsersIcon, Phone as PhoneIcon,
-  Mail as MailIcon, Map as MapIcon, ThumbsUp, MessageCircle
+  Mail as MailIcon, Map as MapIcon
 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import EventHeader from "../../components/EventHeader";
@@ -54,8 +54,7 @@ export default function DefaultEventPage({ event }) {
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [user, setUser] = useState(null);
-  const [featurePostsLikes, setFeaturePostsLikes] = useState({});
-  const [featurePostsViews, setFeaturePostsViews] = useState({});
+  
   
   const heroTimerRef = useRef(null);
   const posterTimerRef = useRef(null);
@@ -117,15 +116,6 @@ export default function DefaultEventPage({ event }) {
       const firstFourPosts = event.main_gallery.slice(0, 4);
       setFeaturePosts(firstFourPosts);
       
-      // Initialize likes and views state
-      const initialLikes = {};
-      const initialViews = {};
-      firstFourPosts.forEach((post, index) => {
-        initialLikes[index] = post.likes || 0;
-        initialViews[index] = post.views || 0;
-      });
-      setFeaturePostsLikes(initialLikes);
-      setFeaturePostsViews(initialViews);
     }
   }, [event]);
 
@@ -523,14 +513,6 @@ export default function DefaultEventPage({ event }) {
       }
       return newFavorites;
     });
-  };
-
-  // ---------- feature post like toggle ----------
-  const toggleFeaturePostLike = (postIndex) => {
-    setFeaturePostsLikes(prev => ({
-      ...prev,
-      [postIndex]: prev[postIndex] + 1
-    }));
   };
 
   // ---------- share functionality ----------
@@ -1436,51 +1418,28 @@ export default function DefaultEventPage({ event }) {
                 {post.caption || "Check out this amazing post from the event!"}
               </p>
               
-              {/* Post Stats and Actions */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  {/* Likes */}
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleFeaturePostLike(index);
-                    }}
-                    className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors"
-                  >
-                    <ThumbsUp className="w-4 h-4" />
-                    <span className="text-xs font-medium">{featurePostsLikes[index] || 0}</span>
-                  </button>
-                  
-                  {/* Views */}
-                  <div className="flex items-center gap-1 text-gray-500">
-                    <Eye className="w-4 h-4" />
-                    <span className="text-xs font-medium">{featurePostsViews[index] || 0}</span>
-                  </div>
-                </div>
-                
-                {/* Share & Download Actions */}
-                <div className="flex items-center gap-2">
-                  {post.shareable && (
-                    <button 
-                      onClick={(e) => handleFeaturePostShare(index, e)}
-                      className="p-1 text-gray-500 hover:text-blue-500 transition-colors"
-                      title="Share"
-                    >
-                      <Share2 className="w-4 h-4" />
-                    </button>
-                  )}
-                  
-                  {post.downloadable && (
-                    <button 
-                      onClick={(e) => handleFeaturePostDownload(index, e)}
-                      className="p-1 text-gray-500 hover:text-green-500 transition-colors"
-                      title="Download"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
+              {/* Post Actions */}
+<div className="flex items-center justify-end gap-2">
+  {post.shareable && (
+    <button 
+      onClick={(e) => handleFeaturePostShare(index, e)}
+      className="p-1 text-gray-500 hover:text-blue-500 transition-colors"
+      title="Share"
+    >
+      <Share2 className="w-4 h-4" />
+    </button>
+  )}
+  
+  {post.downloadable && (
+    <button 
+      onClick={(e) => handleFeaturePostDownload(index, e)}
+      className="p-1 text-gray-500 hover:text-green-500 transition-colors"
+      title="Download"
+    >
+      <Download className="w-4 h-4" />
+    </button>
+  )}
+</div>
             </div>
           </motion.div>
         ))}
@@ -1526,39 +1485,18 @@ export default function DefaultEventPage({ event }) {
                 {post.caption || "Check out this amazing post!"}
               </p>
               
-              {/* Post Stats and Actions */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {/* Likes */}
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleFeaturePostLike(index);
-                    }}
-                    className="flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors"
-                  >
-                    <ThumbsUp className="w-3 h-3" />
-                    <span className="text-xs font-medium">{featurePostsLikes[index] || 0}</span>
-                  </button>
-                  
-                  {/* Views */}
-                  <div className="flex items-center gap-1 text-gray-500">
-                    <Eye className="w-3 h-3" />
-                    <span className="text-xs font-medium">{featurePostsViews[index] || 0}</span>
-                  </div>
-                </div>
-                
-                {/* Share Action Only on Mobile */}
-                {post.shareable && (
-                  <button 
-                    onClick={(e) => handleFeaturePostShare(index, e)}
-                    className="p-1 text-gray-500 hover:text-blue-500 transition-colors"
-                    title="Share"
-                  >
-                    <Share2 className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
+              {/* Post Actions */}
+<div className="flex items-center justify-end">
+  {post.shareable && (
+    <button 
+      onClick={(e) => handleFeaturePostShare(index, e)}
+      className="p-1 text-gray-500 hover:text-blue-500 transition-colors"
+      title="Share"
+    >
+      <Share2 className="w-3 h-3" />
+    </button>
+  )}
+</div>
             </div>
           </motion.div>
         ))}
