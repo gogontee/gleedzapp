@@ -18,8 +18,8 @@ export default function FormsDisplay({ eventId, colors = {}, isPublisher = false
   const [currentUser, setCurrentUser] = useState(null);
 
   const currentColors = colors || {
-    primary: '#3b82f6',
-    secondary: '#1e40af', 
+    primary: '#b09c1eff',
+    secondary: '#e1da99ff', 
     background: '#f8fafc',
     text: '#1f2937',
     card: '#ffffff',

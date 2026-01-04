@@ -34,6 +34,8 @@ import {
   Wallet,
   Shield,
   Zap,
+  Volume2,
+  VolumeX
 } from "lucide-react";
 import Image from "next/image";
 
@@ -95,6 +97,8 @@ const features = [
 export default function HomeClient({ logoUrl, posters }) {
   const [currentPoster, setCurrentPoster] = useState(0);
   const videoRef = useRef(null);
+  const heroVideoRefs = useRef([]);
+  const posterVideoRefs = useRef([]);
   const router = useRouter();
   const [session, setSession] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -119,6 +123,8 @@ export default function HomeClient({ logoUrl, posters }) {
   const slideIntervalRef = useRef(null);
   const [isHeroHovered, setIsHeroHovered] = useState(false);
   const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [isHeroVideoPlaying, setIsHeroVideoPlaying] = useState(false);
+  const [heroVolume, setHeroVolume] = useState(0.3); // Set volume to 30% (not too loud)
 
   // FIXED: Better cache busting that works with hydration
   const getCacheBustedUrl = (url, isClient = false) => {
@@ -127,6 +133,76 @@ export default function HomeClient({ logoUrl, posters }) {
       return `${url}?v=1`; // Fixed version instead of timestamp
     }
     return url;
+  };
+
+  // Initialize video refs array
+  useEffect(() => {
+    heroVideoRefs.current = heroVideoRefs.current.slice(0, heroSlides.length);
+    posterVideoRefs.current = posterVideoRefs.current.slice(0, posters.length);
+  }, [heroSlides.length, posters.length]);
+
+  // Handle hero video play with sound
+  const handleHeroVideoPlay = (index) => {
+    if (heroVideoRefs.current[index]) {
+      try {
+        // Set volume to 30%
+        heroVideoRefs.current[index].volume = heroVolume;
+        
+        // Play video with sound
+        const playPromise = heroVideoRefs.current[index].play();
+        
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            setIsHeroVideoPlaying(true);
+            console.log(`Hero video ${index} playing with sound`);
+          }).catch(error => {
+            console.error(`Error playing hero video ${index}:`, error);
+            // If autoplay fails due to user interaction requirement, 
+            // the video will play when user interacts with the page
+          });
+        }
+      } catch (error) {
+        console.error(`Error setting up hero video ${index}:`, error);
+      }
+    }
+  };
+
+  // Handle hero video pause
+  const handleHeroVideoPause = (index) => {
+    if (heroVideoRefs.current[index]) {
+      heroVideoRefs.current[index].pause();
+      setIsHeroVideoPlaying(false);
+    }
+  };
+
+  // Handle hero video end
+  const handleHeroVideoEnd = (index) => {
+    console.log(`Hero video ${index} ended`);
+    setIsHeroVideoPlaying(false);
+    // Move to next slide when video ends
+    setTimeout(() => {
+      setDirection("right");
+      setCurrentHero((prev) => (prev + 1) % heroSlides.length);
+    }, 500); // Small delay before transitioning
+  };
+
+  // Handle poster video - ensure it's muted
+  const handlePosterVideoPlay = (index) => {
+    if (posterVideoRefs.current[index]) {
+      // Ensure poster videos are muted
+      posterVideoRefs.current[index].muted = true;
+      posterVideoRefs.current[index].volume = 0;
+      
+      const playPromise = posterVideoRefs.current[index].play();
+      
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          console.log(`Poster video ${index} playing (muted)`);
+        }).catch(error => {
+          console.error(`Error playing poster video ${index}:`, error);
+        });
+      }
+    }
   };
 
   // Close dropdown when clicking outside
@@ -493,6 +569,31 @@ export default function HomeClient({ logoUrl, posters }) {
     };
   }, [currentHero, heroSlides]);
 
+  // Handle hero video when slide changes
+  useEffect(() => {
+    const currentSlide = heroSlides[currentHero];
+    
+    // Stop all hero videos first
+    heroVideoRefs.current.forEach((video, index) => {
+      if (video && index !== currentHero) {
+        video.pause();
+        video.currentTime = 0;
+      }
+    });
+    
+    // If current slide is video, play it with sound
+    if (currentSlide && currentSlide.type === "video") {
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        if (heroVideoRefs.current[currentHero]) {
+          handleHeroVideoPlay(currentHero);
+        }
+      }, 100);
+    } else {
+      setIsHeroVideoPlaying(false);
+    }
+  }, [currentHero, heroSlides]);
+
   // Handle slide navigation
   const goToSlide = (index) => {
     if (index === currentHero) return;
@@ -520,12 +621,6 @@ export default function HomeClient({ logoUrl, posters }) {
     }
   };
 
-  // Handle video end for hero slides
-  const handleVideoEnd = () => {
-    setDirection("right");
-    setCurrentHero((prev) => (prev + 1) % heroSlides.length);
-  };
-
   // Updated poster rotation logic
   useEffect(() => {
     if (posters.length === 0) return;
@@ -536,28 +631,12 @@ export default function HomeClient({ logoUrl, posters }) {
     let timer;
 
     if (isVideo) {
-      const handleVideoEnd = () => {
+      // For poster videos, ensure they're muted
+      handlePosterVideoPlay(currentPoster);
+      
+      timer = setTimeout(() => {
         setCurrentPoster((prev) => (prev + 1) % posters.length);
-      };
-
-      const videoElement = document.querySelector(`video[src="${getCacheBustedUrl(current.url)}"]`);
-      if (videoElement) {
-        videoElement.addEventListener('ended', handleVideoEnd);
-        
-        timer = setTimeout(() => {
-          videoElement.removeEventListener('ended', handleVideoEnd);
-          setCurrentPoster((prev) => (prev + 1) % posters.length);
-        }, 30000);
-
-        return () => {
-          videoElement.removeEventListener('ended', handleVideoEnd);
-          if (timer) clearTimeout(timer);
-        };
-      } else {
-        timer = setTimeout(() => {
-          setCurrentPoster((prev) => (prev + 1) % posters.length);
-        }, 10000);
-      }
+      }, 30000);
     } else {
       timer = setTimeout(() => {
         setCurrentPoster((prev) => (prev + 1) % posters.length);
@@ -568,6 +647,12 @@ export default function HomeClient({ logoUrl, posters }) {
       if (timer) clearTimeout(timer);
     };
   }, [currentPoster, posters]);
+
+  // Handle poster video end
+  const handlePosterVideoEnd = (index) => {
+    console.log(`Poster video ${index} ended`);
+    setCurrentPoster((prev) => (prev + 1) % posters.length);
+  };
 
   // Handle event tab click
   const handleEventTabClick = (tab) => {
@@ -753,6 +838,20 @@ export default function HomeClient({ logoUrl, posters }) {
         ))}
       </div>
     );
+  };
+
+  // Handle volume toggle for hero videos
+  const toggleHeroVolume = () => {
+    const currentVideo = heroVideoRefs.current[currentHero];
+    if (currentVideo) {
+      if (currentVideo.volume > 0) {
+        currentVideo.volume = 0;
+        setHeroVolume(0);
+      } else {
+        currentVideo.volume = 0.3; // Restore to 30%
+        setHeroVolume(0.3);
+      }
+    }
   };
 
   return (
@@ -967,16 +1066,17 @@ export default function HomeClient({ logoUrl, posters }) {
               >
                 {slide.type === "video" ? (
                   <video
+                    ref={el => heroVideoRefs.current[idx] = el}
                     src={getCacheBustedUrl(slide.src)}
                     autoPlay
                     playsInline
-                    muted
                     className="absolute inset-0 w-full h-full object-cover"
-                    onEnded={handleVideoEnd}
+                    onEnded={() => handleHeroVideoEnd(idx)}
                     onError={(e) => {
-                      console.error('Video failed to load:', slide.src);
-                      handleVideoEnd();
+                      console.error('Hero video failed to load:', slide.src);
+                      handleHeroVideoEnd(idx);
                     }}
+                    // Remove muted attribute for hero videos
                   />
                 ) : (
                   <div className="absolute inset-0 w-full h-full">
@@ -1029,6 +1129,27 @@ export default function HomeClient({ logoUrl, posters }) {
               </motion.div>
             );
           })}
+          
+          {/* Volume control for hero videos (only shown when hero video is playing) */}
+          {heroSlides[currentHero]?.type === "video" && (
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: isHeroHovered ? 1 : 0 }}
+              transition={{ duration: 0.3 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleHeroVolume();
+              }}
+              className="absolute bottom-20 md:bottom-24 right-4 z-30 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full transition-all duration-200"
+              aria-label={heroVolume > 0 ? "Mute sound" : "Unmute sound"}
+            >
+              {heroVolume > 0 ? (
+                <Volume2 className="w-4 h-4 md:w-5 md:h-5" />
+              ) : (
+                <VolumeX className="w-4 h-4 md:w-5 md:h-5" />
+              )}
+            </motion.button>
+          )}
           
           {/* Navigation Dots - Visible only on hover */}
           {heroSlides.length > 1 && (
@@ -1282,15 +1403,16 @@ export default function HomeClient({ logoUrl, posters }) {
                       >
                         {isVideo ? (
                           <video
+                            ref={el => posterVideoRefs.current[idx] = el}
                             src={getCacheBustedUrl(poster.url)}
                             autoPlay
-                            muted
                             playsInline
+                            muted // Poster videos remain muted
                             className="w-full h-full object-cover"
-                            onEnded={() => setCurrentPoster((prev) => (prev + 1) % posters.length)}
+                            onEnded={() => handlePosterVideoEnd(idx)}
                             onError={(e) => {
                               console.error('Poster video failed to load:', poster.url);
-                              setCurrentPoster((prev) => (prev + 1) % posters.length);
+                              handlePosterVideoEnd(idx);
                             }}
                           />
                         ) : (

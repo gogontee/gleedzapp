@@ -1372,7 +1372,7 @@ export default function DefaultEventPage({ event }) {
       >
         <h2 className="text-3xl font-bold text-gray-900 mb-3">Featured Posts</h2>
         <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-          Discover the latest updates and highlights from the event
+          Discover the latest updates and highlights from our event
         </p>
       </motion.div>
 

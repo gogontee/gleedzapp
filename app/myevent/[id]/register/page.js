@@ -57,8 +57,8 @@ export default function RegisterPage() {
   // 🟣 Updated getEventColors — handles array, object, or string
   const getEventColors = (eventData) => {
     const defaultColors = {
-      primary: "#3b82f6",
-      secondary: "#1e40af",
+      primary: "#ce9c1eff",
+      secondary: "#d4ce99ff",
       background: "#f8fafc",
       text: "#1f2937",
       card: "#ffffff",

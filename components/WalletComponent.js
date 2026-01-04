@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
 import { Wallet, PlusCircle, ArrowDownCircle, Coins, TrendingUp, Eye, EyeOff, History, CheckCircle, XCircle, Clock } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
-import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
+import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 
-// Dynamic import for Paystack to avoid SSR issues
+// Dynamic import for Paystack
 const loadPaystack = () => {
   if (typeof window !== 'undefined') {
     return import('react-paystack').then(module => module.usePaystackPayment);
@@ -14,14 +14,108 @@ const loadPaystack = () => {
   return Promise.resolve(() => {});
 };
 
-// Main component wrapper with PayPal provider
+// PayPal button component that handles loading state properly
+function PayPalButtonWrapper({ tokenAmount, userId, tokenToDollar, handlePayPalSuccess }) {
+  const [{ isPending, isResolved }] = usePayPalScriptReducer();
+  
+  if (tokenAmount <= 0) {
+    return null; // Don't render anything if no tokens selected
+  }
+  
+  if (isPending) {
+    return (
+      <div className="text-center py-4">
+        <div className="inline-flex items-center gap-2 text-sm text-gray-600">
+          <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          Loading PayPal payment options...
+        </div>
+      </div>
+    );
+  }
+  
+  if (!isResolved) {
+    return (
+      <div className="text-center py-4">
+        <div className="text-sm text-yellow-600">
+          PayPal payment options are not available at the moment.
+        </div>
+      </div>
+    );
+  }
+  
+  return (
+    <PayPalButtons
+      style={{ 
+        layout: "vertical",
+        color: "gold",
+        shape: "rect",
+        height: 55,
+        label: "checkout",
+        tagline: false
+      }}
+      fundingSource={undefined}
+      createOrder={async (data, actions) => {
+        const usdAmount = tokenToDollar(tokenAmount);
+        
+        if (usdAmount < 0.50) {
+          alert("Minimum payment is $0.50 USD");
+          return Promise.reject("Amount too small");
+        }
+        
+        return actions.order.create({
+          intent: "CAPTURE",
+          purchase_units: [{
+            amount: {
+              value: usdAmount.toFixed(2),
+              currency_code: "USD"
+            },
+            description: `Purchase of ${tokenAmount} tokens`,
+            custom_id: `USER_${userId || 'GUEST'}_TOKENS_${tokenAmount}`,
+          }],
+          application_context: {
+            shipping_preference: 'NO_SHIPPING',
+            user_action: 'PAY_NOW',
+            payment_method: {
+              payer_selected: 'PAYPAL',
+              payee_preferred: 'IMMEDIATE_PAYMENT_REQUIRED'
+            }
+          }
+        });
+      }}
+      onApprove={handlePayPalSuccess}
+      onError={(error) => {
+        console.error("PayPal Button Error:", error);
+        alert(`Payment error: ${error.message}. Please try another method.`);
+      }}
+      onCancel={() => {
+        console.log("PayPal payment cancelled by user");
+        alert("Payment was cancelled. You can try again.");
+      }}
+    />
+  );
+}
+
+// Main component wrapper
 export default function WalletComponent() {
+  const [isClient, setIsClient] = useState(false);
+  
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return <div className="animate-pulse w-full max-w-4xl mx-auto space-y-6">
+      <div className="h-64 bg-gray-200 rounded-xl"></div>
+    </div>;
+  }
+
   return (
     <PayPalScriptProvider 
       options={{ 
-        "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID,
+        "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "test",
         currency: "USD",
-        intent: "capture"
+        intent: "capture",
+        components: "buttons",
       }}
     >
       <WalletContent />
@@ -29,10 +123,8 @@ export default function WalletComponent() {
   );
 }
 
-// Inner component with all the existing logic
+// Inner component
 function WalletContent() {
-  const [fundOpen, setFundOpen] = useState(false);
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [tokenAmount, setTokenAmount] = useState(0);
   const [withdrawTokens, setWithdrawTokens] = useState(0);
   const [accountDetails, setAccountDetails] = useState({
@@ -48,44 +140,43 @@ function WalletContent() {
   const [userEmail, setUserEmail] = useState("");
   const [paystackLoading, setPaystackLoading] = useState(false);
   const [usePaystackPayment, setUsePaystackPayment] = useState(null);
-  const [isClient, setIsClient] = useState(false);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
-  const [exchangeRate, setExchangeRate] = useState(1500); // Default: 1 USD = ₦1500
-  const [successWithdrawalAmount, setSuccessWithdrawalAmount] = useState(0); // Store the successful withdrawal amount
+  const [exchangeRate, setExchangeRate] = useState(1500);
+  const [successWithdrawalAmount, setSuccessWithdrawalAmount] = useState(0);
   const [withdrawalHistory, setWithdrawalHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  
+  // PayPal states
+  const [paypalProcessing, setPaypalProcessing] = useState(false);
+  const [paypalError, setPaypalError] = useState(null);
 
-  // CORRECTED: 1000 Naira = 1 token
+  // Conversion functions
   const nairaToToken = (naira) => Math.floor(naira / 1000);
   const tokenToNaira = (tokens) => tokens * 1000;
   const tokenToDollar = (tokens) => (tokens * 1000) / exchangeRate;
 
   // Initialize client-side only components
   useEffect(() => {
-    setIsClient(true);
     loadPaystack().then(hook => {
       setUsePaystackPayment(() => hook);
     });
     
-    // Fetch current exchange rate (you can replace this with a real API)
+    // Fetch current exchange rate
     fetchExchangeRate();
   }, []);
 
-  // Fetch current exchange rate (mock function - replace with real API)
   const fetchExchangeRate = async () => {
     try {
-      // This is a mock - replace with actual exchange rate API
-      // Example: fetch('https://api.exchangerate-api.com/v4/latest/NGN')
-      const mockRate = 1500; // 1 USD = ₦1500
+      const mockRate = 1500;
       setExchangeRate(mockRate);
     } catch (error) {
       console.error("Error fetching exchange rate:", error);
-      setExchangeRate(1500); // Fallback rate
+      setExchangeRate(1500);
     }
   };
 
-  // Get the authenticated user
+  // Get authenticated user
   useEffect(() => {
     async function fetchUser() {
       const { data } = await supabase.auth.getUser();
@@ -100,6 +191,62 @@ function WalletContent() {
     fetchUser();
   }, []);
 
+  // Add this useEffect to check for pending guest payments after login
+  useEffect(() => {
+    if (userId && typeof window !== 'undefined') {
+      const pendingPayment = localStorage.getItem('pendingGuestPayment');
+      
+      if (pendingPayment) {
+        try {
+          const paymentData = JSON.parse(pendingPayment);
+          
+          // Check if payment is still valid (within 24 hours)
+          if (paymentData.expiresAt > Date.now()) {
+            // Prompt user to claim tokens
+            if (confirm(`You have ${paymentData.tokenAmount} tokens pending from a guest payment. Would you like to claim them now?`)) {
+              claimGuestTokens(paymentData);
+            }
+          } else {
+            localStorage.removeItem('pendingGuestPayment');
+          }
+        } catch (error) {
+          console.error('Error processing pending payment:', error);
+        }
+      }
+    }
+  }, [userId]);
+
+  const claimGuestTokens = async (paymentData) => {
+    try {
+      const response = await fetch('/api/paypal/claim-guest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          captureId: paymentData.captureId,
+          tokenAmount: paymentData.tokenAmount,
+          guestToken: paymentData.guestToken
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        // Update local balance
+        setBalance(result.newBalance);
+        localStorage.removeItem('pendingGuestPayment');
+        alert(`Successfully claimed ${paymentData.tokenAmount} tokens!`);
+      } else {
+        throw new Error(result.error || 'Claim failed');
+      }
+    } catch (error) {
+      console.error('Claim guest tokens error:', error);
+      alert('Failed to claim tokens. Please contact support.');
+    }
+  };
+
   // Fetch wallet balance
   useEffect(() => {
     if (!userId) return;
@@ -113,11 +260,8 @@ function WalletContent() {
           .eq("user_id", userId)
           .single();
 
-        console.log("Wallet query result:", { data, error });
-
         if (error) {
           console.error("Error fetching token balance:", error.message);
-          // If wallet doesn't exist, create it
           const { data: newWallet, error: createError } = await supabase
             .from("token_wallets")
             .insert({ 
@@ -178,7 +322,7 @@ function WalletContent() {
     fetchWithdrawalHistory();
   }, [userId]);
 
-  // Real-time balance updates
+  // Real-time updates
   useEffect(() => {
     if (!userId) return;
 
@@ -193,7 +337,6 @@ function WalletContent() {
           filter: `user_id=eq.${userId}` 
         },
         (payload) => {
-          console.log('Realtime wallet update:', payload);
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             setBalance(payload.new.balance);
           }
@@ -206,88 +349,173 @@ function WalletContent() {
     };
   }, [userId]);
 
-  // Real-time withdrawal updates
-  useEffect(() => {
-    if (!userId) return;
-
-    const subscription = supabase
-      .channel('withdrawal-updates')
-      .on(
-        'postgres_changes',
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'withdrawals', 
-          filter: `user_id=eq.${userId}` 
-        },
-        () => {
-          // Refresh withdrawal history when there are changes
-          fetchWithdrawalHistory();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(subscription);
-    };
-  }, [userId]);
-
-  const fetchWithdrawalHistory = async () => {
-    if (!userId) return;
-    
-    setLoadingHistory(true);
+  // FIXED: PayPal payment verification
+  const verifyPayPalPayment = async (orderId, captureId) => {
     try {
-      const { data, error } = await supabase
-        .from("withdrawals")
-        .select("account_name, account_number, bank_name, token_amount, approved, sent, sent_amount, sent_time, created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
+      setPaypalProcessing(true);
+      setPaypalError(null);
 
-      if (error) {
-        console.error("Error fetching withdrawal history:", error);
-        setWithdrawalHistory([]);
-      } else {
-        setWithdrawalHistory(data || []);
+      // First verify payment with PayPal API
+      const verificationResponse = await fetch('/api/verify-paypal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderId,
+          captureId,
+          userId,
+          tokenAmount,
+          usdAmount: tokenToDollar(tokenAmount)
+        }),
+      });
+
+      const verificationResult = await verificationResponse.json();
+
+      if (!verificationResponse.ok) {
+        throw new Error(verificationResult.error || 'Payment verification failed');
       }
+
+      if (!verificationResult.verified) {
+        throw new Error('Payment could not be verified with PayPal');
+      }
+
+      // If verified, update wallet in database
+      const updateResponse = await fetch('/api/update-wallet', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          tokenAmount,
+          transactionId: verificationResult.transactionId,
+          orderId
+        }),
+      });
+
+      const updateResult = await updateResponse.json();
+
+      if (!updateResponse.ok) {
+        throw new Error(updateResult.error || 'Failed to update wallet');
+      }
+
+      // Update local balance
+      setBalance(updateResult.newBalance);
+      
+      // Show success message
+      alert(`Payment successful! ${tokenAmount} tokens added to your wallet.`);
+      setTokenAmount(0);
+      
+      return updateResult;
+      
     } catch (error) {
-      console.error("Unexpected error fetching withdrawal history:", error);
-      setWithdrawalHistory([]);
+      console.error('PayPal verification error:', error);
+      setPaypalError(error.message);
+      alert(`Payment failed: ${error.message}`);
+      throw error;
     } finally {
-      setLoadingHistory(false);
+      setPaypalProcessing(false);
     }
   };
 
-  // Payment success callback
+  // Add this new function for guest payments
+  const handleGuestPayment = async (orderId, captureId, payerEmail) => {
+    try {
+      setPaypalProcessing(true);
+      
+      const response = await fetch('/api/paypal/guest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          captureId,
+          email: payerEmail,
+          tokenAmount,
+          orderId
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Guest payment processing failed');
+      }
+
+      // Store guest payment details in localStorage
+      localStorage.setItem('pendingGuestPayment', JSON.stringify({
+        captureId,
+        tokenAmount,
+        guestToken: result.guestToken,
+        timestamp: Date.now(),
+        expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+      }));
+
+      // Show message to user
+      alert(`Payment successful! ${tokenAmount} tokens have been purchased. Please create an account or login to claim your tokens.`);
+      
+      // Redirect to signup/login page with token
+      window.location.href = `/auth/signup?guestToken=${result.guestToken}&tokens=${tokenAmount}`;
+      
+    } catch (error) {
+      console.error('Guest payment error:', error);
+      alert(`Payment successful but claim failed: ${error.message}. Please contact support with order ID: ${orderId}`);
+    } finally {
+      setPaypalProcessing(false);
+    }
+  };
+
+  // Handle PayPal payment success
+  const handlePayPalSuccess = useCallback(async (details, actions) => {
+    try {
+      console.log("PayPal payment success details:", details);
+      
+      // Get the order details
+      const orderId = details.id;
+      const captureId = details.purchase_units?.[0]?.payments?.captures?.[0]?.id;
+      const payerEmail = details.payer?.email_address;
+      
+      if (!orderId) {
+        throw new Error('No order ID found in payment details');
+      }
+
+      // Check if user is authenticated
+      if (userId) {
+        // Registered user flow
+        await verifyPayPalPayment(orderId, captureId);
+      } else {
+        // Guest user flow
+        await handleGuestPayment(orderId, captureId, payerEmail);
+      }
+      
+    } catch (error) {
+      console.error("PayPal payment processing error:", error);
+      alert("Payment processing failed. Please contact support if funds were deducted.");
+    }
+  }, [userId, tokenAmount]);
+
+  // Paystack functions
   const onSuccess = (reference) => {
-    console.log("Payment successful:", reference);
+    console.log("Paystack payment successful:", reference);
     setPaystackLoading(false);
     
-    // Update wallet balance in Supabase with last_action
-    updateWalletBalance(tokenAmount, reference.reference);
+    updateWalletBalance(tokenAmount, reference.reference, false);
     
-    // Store transaction record
-    verifyTransaction(reference.reference);
+    verifyTransaction(reference.reference, false);
     
     alert(`Payment successful! ${tokenAmount} tokens added to your wallet.`);
     setTokenAmount(0);
-    setFundOpen(false);
   };
 
-  // Payment close callback
   const onClose = () => {
     console.log("Payment modal closed");
     setPaystackLoading(false);
     alert("Payment was cancelled. Please try again.");
   };
 
-  // Handle proceed to pay with proper initialization
   const handleProceedToPay = () => {
-    if (!isClient || !usePaystackPayment) {
-      alert("Payment system is initializing. Please try again in a moment.");
-      return;
-    }
-
-    if (tokenAmount < 1) {
+    if (!usePaystackPayment || tokenAmount < 1) {
       alert("Please enter a valid token amount (minimum 1 token)");
       return;
     }
@@ -297,37 +525,20 @@ function WalletContent() {
       return;
     }
 
-    // Validate environment variable
     const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
     if (!publicKey) {
       alert("Payment system is not configured. Please contact support.");
-      console.error("Paystack public key is missing");
       return;
     }
 
-    if (!publicKey.startsWith('pk_test_') && !publicKey.startsWith('pk_live_')) {
-      alert("Invalid payment configuration. Please contact support.");
-      console.error("Invalid Paystack public key format:", publicKey);
-      return;
-    }
-
-    // Validate amount
     const amountInKobo = tokenAmount * 1000 * 100;
     if (amountInKobo < 10000) {
       alert("Minimum purchase is 1 token (₦1,000)");
       return;
     }
 
-    console.log("Proceeding to payment with:", {
-      tokenAmount,
-      nairaAmount: tokenAmount * 1000,
-      amountInKobo,
-      userEmail
-    });
-
     setPaystackLoading(true);
 
-    // Create config
     const config = {
       reference: `GIGZZ_${userId}_${Date.now()}`,
       email: userEmail,
@@ -350,9 +561,6 @@ function WalletContent() {
       }
     };
 
-    console.log("Paystack Config:", config);
-
-    // Initialize payment with config
     try {
       const initializePayment = usePaystackPayment();
       initializePayment({
@@ -367,17 +575,14 @@ function WalletContent() {
     }
   };
 
-  // Update wallet balance after successful payment with last_action
-  const updateWalletBalance = async (tokensToAdd, reference = null) => {
+  const updateWalletBalance = async (tokensToAdd, reference = null, isPaypal = false) => {
     if (!userId) return;
 
-    const isPaypal = reference && reference.startsWith('PAYPAL_');
     const actionDescription = isPaypal 
       ? `top up from paypal - ${tokensToAdd} tokens - Ref: ${reference}`
       : `top up from paystack - ${tokensToAdd} tokens - Ref: ${reference || 'N/A'}`;
 
     try {
-      // Get current balance
       const { data: currentWallet, error: fetchError } = await supabase
         .from("token_wallets")
         .select("balance")
@@ -385,8 +590,6 @@ function WalletContent() {
         .single();
 
       if (fetchError) {
-        console.error("Error fetching current balance:", fetchError);
-        // Create wallet if it doesn't exist
         const { data: newWallet, error: createError } = await supabase
           .from("token_wallets")
           .insert({ 
@@ -403,9 +606,7 @@ function WalletContent() {
           return;
         }
         setBalance(newWallet.balance);
-        console.log("Wallet created with last_action:", actionDescription);
       } else {
-        // Update existing wallet
         const currentBalance = currentWallet?.balance || 0;
         const newBalance = currentBalance + tokensToAdd;
 
@@ -418,11 +619,8 @@ function WalletContent() {
           })
           .eq("user_id", userId);
 
-        if (updateError) {
-          console.error("Error updating wallet balance:", updateError);
-        } else {
+        if (!updateError) {
           setBalance(newBalance);
-          console.log("Wallet balance updated successfully with last_action:", actionDescription);
         }
       }
     } catch (error) {
@@ -430,7 +628,6 @@ function WalletContent() {
     }
   };
 
-  // Store transaction with correct conversion
   const verifyTransaction = async (reference, isPaypal = false) => {
     try {
       const description = isPaypal ? "top up from paypal" : "top up from paystack";
@@ -450,36 +647,13 @@ function WalletContent() {
 
       if (error) {
         console.error("Error storing transaction:", error);
-      } else {
-        console.log("Transaction recorded successfully with description:", description);
       }
     } catch (error) {
       console.error("Error verifying transaction:", error);
     }
   };
 
-  // Handle PayPal payment success
-  const handlePayPalSuccess = async (details) => {
-    try {
-      console.log("PayPal payment successful:", details);
-      
-      // Update wallet balance in Supabase
-      await updateWalletBalance(tokenAmount, `PAYPAL_${details.id}`);
-      
-      // Store transaction record
-      await verifyTransaction(`PAYPAL_${details.id}`, true);
-      
-      alert(`Payment successful! ${tokenAmount} tokens added to your wallet.`);
-      setTokenAmount(0);
-      setFundOpen(false);
-      
-    } catch (error) {
-      console.error("PayPal payment error:", error);
-      alert("Payment processing failed. Please try again.");
-    }
-  };
-
-  // Handle withdrawal request
+  // Withdrawal functions
   const handleWithdrawalRequest = async () => {
     if (!userId) {
       alert("Please log in to request withdrawal");
@@ -509,8 +683,7 @@ function WalletContent() {
     setWithdrawLoading(true);
 
     try {
-      // Verify user password first
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      const { error: authError } = await supabase.auth.signInWithPassword({
         email: userEmail,
         password: password
       });
@@ -521,31 +694,27 @@ function WalletContent() {
         return;
       }
 
-      // Store the withdrawal amount before resetting the form
       const withdrawalAmount = withdrawTokens;
 
-      // Insert withdrawal request - SIMPLIFIED: Only store the essential fields
       const { data: withdrawalData, error: withdrawalError } = await supabase
         .from("withdrawals")
         .insert({
           user_id: userId,
-          token_amount: withdrawTokens, // Store token amount
-          bank_name: accountDetails.bankName, // Store bank name
-          account_name: accountDetails.accountName, // Store account name
-          account_number: accountDetails.accountNumber, // Store account number
+          token_amount: withdrawTokens,
+          bank_name: accountDetails.bankName,
+          account_name: accountDetails.accountName,
+          account_number: accountDetails.accountNumber,
           created_at: new Date().toISOString()
         })
         .select()
         .single();
 
       if (withdrawalError) {
-        console.error("Error creating withdrawal request:", withdrawalError);
         alert("Error processing withdrawal request. Please try again.");
         setWithdrawLoading(false);
         return;
       }
 
-      // Update wallet balance
       const { error: walletError } = await supabase
         .from("token_wallets")
         .update({ 
@@ -555,13 +724,10 @@ function WalletContent() {
         })
         .eq("user_id", userId);
 
-      if (walletError) {
-        console.error("Error updating wallet balance:", walletError);
-      } else {
+      if (!walletError) {
         setBalance(prev => prev - withdrawTokens);
       }
 
-      // Store transaction record
       await supabase
         .from("transactions")
         .insert({
@@ -575,8 +741,7 @@ function WalletContent() {
           created_at: new Date().toISOString()
         });
 
-      // Success - reset form and show success message
-      setSuccessWithdrawalAmount(withdrawalAmount); // Store the amount for the success message
+      setSuccessWithdrawalAmount(withdrawalAmount);
       setWithdrawSuccess(true);
       setWithdrawTokens(0);
       setAccountDetails({
@@ -585,9 +750,6 @@ function WalletContent() {
         accountName: "",
       });
       setPassword("");
-      
-      // Refresh withdrawal history
-      fetchWithdrawalHistory();
       
       setTimeout(() => {
         setWithdrawSuccess(false);
@@ -601,7 +763,6 @@ function WalletContent() {
     }
   };
 
-  // Check if withdrawal form is valid
   const isWithdrawalValid = 
     withdrawTokens >= 1 && 
     withdrawTokens <= balance && 
@@ -610,7 +771,6 @@ function WalletContent() {
     accountDetails.accountName && 
     password;
 
-  // Format date for display
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -620,31 +780,6 @@ function WalletContent() {
       minute: '2-digit'
     });
   };
-
-  // Show loading state while initializing client-side
-  if (!isClient) {
-    return (
-      <div className="w-full max-w-4xl mx-auto space-y-4 md:space-y-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gray-100 rounded-lg">
-                <Wallet className="w-5 h-5 md:w-6 md:h-6 text-gray-400" />
-              </div>
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-600">Token Balance</p>
-                <p className="text-xl md:text-2xl font-bold text-gray-900">Loading...</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="animate-pulse space-y-3">
-          <div className="h-10 md:h-12 bg-gray-200 rounded-lg"></div>
-          <div className="h-10 md:h-12 bg-gray-200 rounded-lg"></div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-4 md:space-y-6">
@@ -745,7 +880,7 @@ function WalletContent() {
               )}
             </button>
 
-            {/* PayPal Payment Button */}
+            {/* PayPal Payment Section */}
             {tokenAmount > 0 && (
               <div className="mt-4">
                 <div className="relative flex items-center py-2">
@@ -753,50 +888,33 @@ function WalletContent() {
                   <span className="flex-shrink mx-4 text-xs text-gray-500">OR</span>
                   <div className="flex-grow border-t border-gray-300"></div>
                 </div>
-                <PayPalButtons
-                  style={{ 
-                    layout: "vertical",
-                    color: "blue",
-                    shape: "rect",
-                    label: "paypal"
-                  }}
-                  createOrder={(data, actions) => {
-                    // Calculate amount in USD based on token amount
-                    const usdAmount = tokenToDollar(tokenAmount);
-                    if (usdAmount < 0.01) {
-                      alert("Minimum PayPal payment is $0.01 USD");
-                      return Promise.reject("Amount too small");
-                    }
-                    return actions.order.create({
-                      purchase_units: [
-                        {
-                          amount: {
-                            value: usdAmount.toFixed(2), // PayPal expects string with 2 decimal places
-                            currency_code: "USD"
-                          },
-                          description: `Wallet funding for ${tokenAmount} tokens`
-                        },
-                      ],
-                    });
-                  }}
-                  onApprove={async (data, actions) => {
-                    try {
-                      const details = await actions.order.capture();
-                      await handlePayPalSuccess(details);
-                    } catch (error) {
-                      console.error("PayPal payment error:", error);
-                      alert("Payment processing failed. Please try again.");
-                    }
-                  }}
-                  onError={(error) => {
-                    console.error("PayPal Button Error:", error);
-                    alert("An error occurred with PayPal. Please try another method.");
-                  }}
-                  onCancel={() => {
-                    console.log("PayPal payment cancelled");
-                    alert("PayPal payment was cancelled.");
-                  }}
+                
+                {paypalError && (
+                  <div className="mb-3 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                    <p className="text-sm font-medium">{paypalError}</p>
+                  </div>
+                )}
+                
+                {/* PayPal Button Component */}
+                <PayPalButtonWrapper 
+                  tokenAmount={tokenAmount}
+                  userId={userId}
+                  tokenToDollar={tokenToDollar}
+                  handlePayPalSuccess={handlePayPalSuccess}
                 />
+                
+                {paypalProcessing && (
+                  <div className="mt-2 text-center">
+                    <div className="inline-flex items-center gap-2 text-sm text-gray-600">
+                      <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                      Processing PayPal payment...
+                    </div>
+                  </div>
+                )}
+                
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Pay with PayPal, Credit Card, or Debit Card
+                </p>
               </div>
             )}
             
