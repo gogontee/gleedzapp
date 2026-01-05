@@ -1,23 +1,20 @@
+// app/robots.js - CORRECTED VERSION
 export default function robots() {
   return {
-    rules: [
-      {
-        userAgent: '*',
-        allow: '/',
-        disallow: [
-          '/admin/',
-          '/api/', // Consider allowing API if you want Google to index dynamic content
-          '/dashboard/',
-          '/private/',
-        ],
-      },
-      {
-        userAgent: 'Googlebot',
-        allow: '/',
-        crawlDelay: 1, // Add delay to prevent server overload
-      },
-    ],
+    // SINGLE rules object, not array
+    rules: {
+      userAgent: '*',
+      allow: '/',
+      disallow: [
+        '/admin/',
+        '/api/',
+        '/dashboard/',
+        '/private/',
+      ],
+    },
+    // KEPT: sitemap directive
     sitemap: 'https://gleedz.com/sitemap.xml',
+    // OPTIONAL: Host directive (some crawlers support it)
     host: 'https://gleedz.com',
   };
 }

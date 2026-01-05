@@ -1,18 +1,8 @@
+// app/sitemap.js
 export default async function sitemap() {
   const baseUrl = 'https://gleedz.com';
   
-  // Fetch all events from your database
-  const events = await fetchEvents(); // Implement this function
-  
-  // Create event URLs
-  const eventUrls = events.map(event => ({
-    url: `${baseUrl}/event/${event.slug || event.id}`,
-    lastModified: new Date(event.updated_at),
-    changeFrequency: 'daily',
-    priority: 0.8,
-  }));
-
-  // Static pages
+  // Static pages - CORRECTED: Use only pages that exist
   const staticPages = [
     {
       url: baseUrl,
@@ -26,49 +16,49 @@ export default async function sitemap() {
       changeFrequency: 'daily',
       priority: 0.9,
     },
+    // ONLY include pages that actually exist on your site
     {
-      url: `${baseUrl}/create-event`,
+      url: `${baseUrl}/login`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.7,
     },
     {
-      url: `${baseUrl}/about`,
+      url: `${baseUrl}/register`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
-      priority: 0.6,
+      priority: 0.7,
     },
-    {
-      url: `${baseUrl}/contact`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.6,
-    },
-    {
-      url: `${baseUrl}/privacy`,
-      lastModified: new Date(),
-      changeFrequency: 'yearly',
-      priority: 0.4,
-    },
-    {
-      url: `${baseUrl}/terms`,
-      lastModified: new Date(),
-      changeFrequency: 'yearly',
-      priority: 0.4,
-    },
+    // REMOVED: /create-event, /about, /contact, /privacy, /terms
+    // (unless these pages actually exist on your site)
   ];
 
-  return [...staticPages, ...eventUrls];
-}
-
-// Function to fetch events from your database
-async function fetchEvents() {
-  // Replace this with your actual database query
-  const { data: events, error } = await supabase
-    .from('events')
-    .select('id, slug, updated_at, name')
-    .eq('is_public', true)
-    .order('updated_at', { ascending: false });
+  // Try to fetch events from Supabase
+  let eventUrls = [];
+  try {
+    // IMPORT supabase correctly
+    const { supabase } = await import('@/lib/supabaseClient');
     
-  return events || [];
+    const { data: events, error } = await supabase
+      .from('events')
+      .select('id, updated_at, name')
+      .eq('is_public', true)
+      .order('updated_at', { ascending: false })
+      .limit(100); // Limit for sitemap size
+      
+    if (!error && events) {
+      eventUrls = events.map(event => ({
+        // CORRECTED: Your event route is `/myevent/[id]` not `/event/[id]`
+        url: `${baseUrl}/myevent/${event.id}`,
+        lastModified: new Date(event.updated_at),
+        changeFrequency: 'daily',
+        priority: 0.8,
+      }));
+    }
+  } catch (error) {
+    console.log('Sitemap: Could not fetch events, using static only');
+    // Continue without events - don't fail the sitemap
+  }
+
+  return [...staticPages, ...eventUrls];
 }
