@@ -1,8 +1,8 @@
-// app/sitemap.js
+// app/sitemap.js - WITH DYNAMIC EVENTS (if you fix the path)
 export default async function sitemap() {
   const baseUrl = 'https://gleedz.com';
   
-  // Static pages - CORRECTED: Use only pages that exist
+  // Static pages
   const staticPages = [
     {
       url: baseUrl,
@@ -16,7 +16,6 @@ export default async function sitemap() {
       changeFrequency: 'daily',
       priority: 0.9,
     },
-    // ONLY include pages that actually exist on your site
     {
       url: `${baseUrl}/login`,
       lastModified: new Date(),
@@ -29,26 +28,22 @@ export default async function sitemap() {
       changeFrequency: 'monthly',
       priority: 0.7,
     },
-    // REMOVED: /create-event, /about, /contact, /privacy, /terms
-    // (unless these pages actually exist on your site)
   ];
 
-  // Try to fetch events from Supabase
+  // Try to fetch events - COMMENT OUT if import fails
   let eventUrls = [];
   try {
-    // IMPORT supabase correctly
-    const { supabase } = await import('@/lib/supabaseClient');
+    // UPDATE THIS PATH to match your actual file location
+    const { supabase } = await import('../lib/supabaseClient'); // ← CHANGE THIS
     
     const { data: events, error } = await supabase
       .from('events')
       .select('id, updated_at, name')
       .eq('is_public', true)
-      .order('updated_at', { ascending: false })
-      .limit(100); // Limit for sitemap size
+      .limit(50);
       
     if (!error && events) {
       eventUrls = events.map(event => ({
-        // CORRECTED: Your event route is `/myevent/[id]` not `/event/[id]`
         url: `${baseUrl}/myevent/${event.id}`,
         lastModified: new Date(event.updated_at),
         changeFrequency: 'daily',
@@ -56,8 +51,8 @@ export default async function sitemap() {
       }));
     }
   } catch (error) {
-    console.log('Sitemap: Could not fetch events, using static only');
-    // Continue without events - don't fail the sitemap
+    console.log('Sitemap: Using static pages only');
+    // Return static pages without events
   }
 
   return [...staticPages, ...eventUrls];
