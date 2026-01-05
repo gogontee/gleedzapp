@@ -5,48 +5,93 @@ import { Gift, Hand } from "lucide-react";
 import CustomAlert from "./CustomAlert";
 import { supabase } from "../lib/supabaseClient";
 
-// Helper function to get user's name with role-based lookup
-const getUserName = async (userId) => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return 'Unknown User';
+// Add PayPal imports
+import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', userId)
-      .single();
-
-    if (userError) {
-      console.error('Error fetching user role:', userError);
-      return 'Unknown User';
-    }
-
-    const role = userData?.role;
-    let userName = 'Unknown User';
-
-    if (role === 'fans') {
-      const { data: fanData } = await supabase
-        .from('fans')
-        .select('full_name')
-        .eq('id', userId)
-        .single();
-      userName = fanData?.full_name || 'Unknown Fan';
-    } else if (role === 'publisher') {
-      const { data: pubData } = await supabase
-        .from('publishers')
-        .select('name')
-        .eq('id', userId)
-        .single();
-      userName = pubData?.name || 'Unknown Publisher';
-    }
-
-    return userName;
-  } catch (error) {
-    console.error('Error fetching user name:', error);
-    return 'Unknown User';
+// PayPal button wrapper for gift
+function PayPalGiftButton({ 
+  selectedGift, 
+  candidate, 
+  event, 
+  userEmail, 
+  onSuccess, 
+  onError 
+}) {
+  const [{ isPending, isResolved }] = usePayPalScriptReducer();
+  
+  if (!selectedGift || selectedGift.tokenValue <= 0) {
+    return null;
   }
-};
+  
+  if (isPending) {
+    return (
+      <div className="text-center py-4">
+        <div className="inline-flex items-center gap-2 text-sm text-gray-600">
+          <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          Loading PayPal...
+        </div>
+      </div>
+    );
+  }
+  
+  if (!isResolved) {
+    return (
+      <div className="text-center py-4">
+        <div className="text-sm text-yellow-600">
+          PayPal is not available at the moment.
+        </div>
+      </div>
+    );
+  }
+  
+  return (
+    <PayPalButtons
+      style={{ 
+        layout: "vertical",
+        color: "gold",
+        shape: "rect",
+        height: 55,
+        label: "checkout",
+        tagline: false
+      }}
+      fundingSource={undefined}
+      createOrder={async (data, actions) => {
+        const usdAmount = selectedGift.tokenValue;
+        
+        if (usdAmount < 0.50) {
+          alert("Minimum payment is $0.50 USD");
+          return Promise.reject("Amount too small");
+        }
+        
+        return actions.order.create({
+          intent: "CAPTURE",
+          purchase_units: [{
+            amount: {
+              value: usdAmount.toFixed(2),
+              currency_code: "USD"
+            },
+            description: `${selectedGift.name} gift for ${candidate.full_name} in ${event.name}`,
+            custom_id: `GIFT_${candidate.id}_EVENT_${event.id}_VALUE_${selectedGift.tokenValue}`,
+          }],
+          application_context: {
+            shipping_preference: 'NO_SHIPPING',
+            user_action: 'PAY_NOW',
+            payment_method: {
+              payer_selected: 'PAYPAL',
+              payee_preferred: 'IMMEDIATE_PAYMENT_REQUIRED'
+            }
+          }
+        });
+      }}
+      onApprove={onSuccess}
+      onError={onError}
+      onCancel={() => {
+        console.log("PayPal payment cancelled by user");
+        alert("Payment was cancelled. You can try again.");
+      }}
+    />
+  );
+}
 
 const gifts = [
   { name: 'Rose', tokenValue: 10, color: '#FF6B6B', emoji: '🌹' },
@@ -60,27 +105,7 @@ const gifts = [
   { name: 'Super Star', tokenValue: 10000, color: '#FF69B4', emoji: '🌟' },
 ];
 
-const paymentMethods = [
-  { 
-    label: "Wallet", 
-    id: "wallet", 
-    image: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/gtoken.png",
-    alt: "GToken Wallet"
-  },
-  { 
-    label: "Pay with Card", 
-    id: "global_payment", 
-    image: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/visamastercard.jpg",
-    alt: "Visa Mastercard"
-  },
-  { 
-    label: "Paystack", 
-    id: "paystack", 
-    image: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/paystack.png",
-    alt: "Naira Payment"
-  },
-];
-
+// Main GiftModal component
 export default function GiftModal({ candidate, event, onClose, pageColor, session, onGiftSuccess, showSuccessAlert }) {
   const [selectedGift, setSelectedGift] = useState(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("wallet");
@@ -92,8 +117,34 @@ export default function GiftModal({ candidate, event, onClose, pageColor, sessio
   const [userEmail, setUserEmail] = useState("");
   const [showHandPointer, setShowHandPointer] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  
+  // PayPal states
+  const [paypalProcessing, setPaypalProcessing] = useState(false);
+  const [paypalError, setPaypalError] = useState(null);
 
   const tokenCost = selectedGift ? selectedGift.tokenValue : 0;
+
+  // Update payment methods to include PayPal with new image and label
+  const paymentMethods = [
+    { 
+      label: "Wallet", 
+      id: "wallet", 
+      image: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/gtoken.png",
+      alt: "GToken Wallet"
+    },
+    { 
+      label: "Use USSD Card", 
+      id: "paypal", 
+      image: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/paypal.jpg",
+      alt: "USSD Card Payment via PayPal"
+    },
+    { 
+      label: "Paystack", 
+      id: "paystack", 
+      image: "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/paystack.png",
+      alt: "Naira Payment"
+    },
+  ];
 
   useEffect(() => {
     // Check if mobile device
@@ -174,6 +225,7 @@ export default function GiftModal({ candidate, event, onClose, pageColor, sessio
       };
     }
     
+    // PayPal and other methods show USD
     return {
       amount: baseCost,
       currency: "USD",
@@ -218,7 +270,183 @@ export default function GiftModal({ candidate, event, onClose, pageColor, sessio
       return;
     }
     
+    // For PayPal, we show the PayPal button directly, no confirm modal needed
+    if (selectedPaymentMethod === "paypal") {
+      return; // PayPal button handles the flow
+    }
+    
     setShowConfirmModal(true);
+  };
+
+  // Process PayPal payment for gift
+  const processPayPalGift = async (details, actions) => {
+    try {
+      console.log("PayPal gift payment success details:", details);
+      
+      const orderId = details.id;
+      const captureId = details.purchase_units?.[0]?.payments?.captures?.[0]?.id;
+      const payerEmail = details.payer?.email_address;
+      const payerName = details.payer?.name?.given_name + " " + details.payer?.name?.surname;
+      
+      if (!orderId) {
+        throw new Error('No order ID found in payment details');
+      }
+
+      setPaypalProcessing(true);
+      
+      // For guest users, collect email if not provided by PayPal
+      let voterEmail = userEmail || payerEmail;
+      if (!session?.user?.id && !voterEmail) {
+        voterEmail = prompt("Please enter your email address to complete your gift:");
+        if (!voterEmail) {
+          handleShowCustomAlert("Email Required", "Email is required to process your gift.", "error");
+          setPaypalProcessing(false);
+          return;
+        }
+      }
+
+      // Create paypal_transactions record for gift
+      const { data: paypalTransaction, error: paypalError } = await supabase
+        .from('paypal_transactions')
+        .insert({
+          user_id: session?.user?.id || null,
+          guest_email: !session?.user?.id ? voterEmail : null,
+          event_id: event.id,
+          candidate_id: candidate.id,
+          publisher_id: event.user_id,
+          amount: selectedGift.tokenValue,
+          currency: 'USD',
+          points: selectedGift.tokenValue, // Points equal to gift value for database trigger
+          paypal_order_id: orderId,
+          paypal_capture_id: captureId,
+          payer_email: payerEmail,
+          payer_name: payerName,
+          status: 'pending',
+          description: `Gift ${selectedGift.name} for ${candidate.full_name} in ${event.name} via PayPal`,
+        })
+        .select()
+        .single();
+
+      if (paypalError) throw paypalError;
+
+      // Verify PayPal payment
+      const verificationResponse = await fetch('/api/vote/verify-paypal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderId,
+          captureId,
+          userId: session?.user?.id || null,
+          guestEmail: voterEmail,
+          candidateId: candidate.id,
+          eventId: event.id,
+          points: selectedGift.tokenValue,
+          amount: selectedGift.tokenValue,
+          paypalTransactionId: paypalTransaction.id,
+          isGift: true,
+          giftName: selectedGift.name
+        }),
+      });
+
+      const verificationResult = await verificationResponse.json();
+
+      if (!verificationResponse.ok) {
+        // Update transaction status to failed
+        await supabase
+          .from('paypal_transactions')
+          .update({ 
+            status: 'failed',
+            error_message: verificationResult.error || 'Payment verification failed',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', paypalTransaction.id);
+          
+        throw new Error(verificationResult.error || 'Payment verification failed');
+      }
+
+      if (!verificationResult.verified) {
+        // Update transaction status to failed
+        await supabase
+          .from('paypal_transactions')
+          .update({ 
+            status: 'failed',
+            error_message: 'Payment could not be verified with PayPal',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', paypalTransaction.id);
+          
+        throw new Error('Payment could not be verified with PayPal');
+      }
+
+      // The database trigger will automatically update candidate gifts
+      // We just need to update the transaction status
+      const { error: updateError } = await supabase
+        .from('paypal_transactions')
+        .update({ 
+          status: 'completed',
+          verified_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          description: `Gift ${selectedGift.name} for ${candidate.full_name} in ${event.name} via PayPal - Completed`
+        })
+        .eq('id', paypalTransaction.id);
+
+      if (updateError) {
+        console.error('Error updating paypal transaction:', updateError);
+        // Continue anyway as the trigger might have already updated gifts
+      }
+
+      // Show success message
+      showSuccessAlert(`Your gift was sent successfully! You sent ${selectedGift.name} to ${candidate.full_name} via PayPal.`);
+      
+      // If user is logged in, update their wallet (optional, for tracking)
+      if (session?.user?.id) {
+        try {
+          await supabase
+            .from('token_transactions')
+            .insert({
+              user_id: session.user.id,
+              tokens_out: 0, // No tokens deducted for PayPal payment
+              description: `Gift ${selectedGift.name} for ${candidate.full_name} in ${event.name} via PayPal`,
+              transaction_id: `paypal_gift_${orderId}`,
+              reference: `gift_${candidate.id}`,
+              payment_method: 'paypal',
+              created_at: new Date().toISOString(),
+            });
+        } catch (tokenError) {
+          console.error('Error creating token transaction:', tokenError);
+          // Non-critical error, continue
+        }
+      }
+
+      // Close modal after delay
+      setTimeout(() => {
+        onGiftSuccess();
+        onClose();
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error processing PayPal gift:', error);
+      setPaypalError(error.message);
+      handleShowCustomAlert(
+        "Payment Failed", 
+        error.message || "There was an error processing your PayPal payment. Please try again.", 
+        "error"
+      );
+    } finally {
+      setPaypalProcessing(false);
+    }
+  };
+
+  const handlePayPalError = (error) => {
+    console.error("PayPal Button Error:", error);
+    setPaypalError(error.message);
+    handleShowCustomAlert(
+      "Payment Error", 
+      `PayPal payment error: ${error.message}. Please try another method.`, 
+      "error"
+    );
   };
 
   // Process wallet payment for gift
@@ -472,6 +700,88 @@ export default function GiftModal({ candidate, event, onClose, pageColor, sessio
   };
 
   return (
+    <PayPalScriptProvider 
+      options={{ 
+        "client-id": process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "test",
+        currency: "USD",
+        intent: "capture",
+        components: "buttons",
+      }}
+    >
+      <GiftModalContent 
+        candidate={candidate}
+        event={event}
+        onClose={onClose}
+        pageColor={pageColor}
+        session={session}
+        onGiftSuccess={onGiftSuccess}
+        showSuccessAlert={showSuccessAlert}
+        selectedGift={selectedGift}
+        setSelectedGift={setSelectedGift}
+        selectedPaymentMethod={selectedPaymentMethod}
+        setSelectedPaymentMethod={setSelectedPaymentMethod}
+        loading={loading}
+        setLoading={setLoading}
+        showConfirmModal={showConfirmModal}
+        setShowConfirmModal={setShowConfirmModal}
+        showCustomAlert={showCustomAlert}
+        alertData={alertData}
+        userCountry={userCountry}
+        userEmail={userEmail}
+        showHandPointer={showHandPointer}
+        isMobile={isMobile}
+        paymentMethods={paymentMethods}
+        displayPrice={displayPrice}
+        paypalProcessing={paypalProcessing}
+        paypalError={paypalError}
+        handleSelectGift={handleSelectGift}
+        handleShowCustomAlert={handleShowCustomAlert}
+        handleCloseCustomAlert={handleCloseCustomAlert}
+        handleGift={handleGift}
+        processPayPalGift={processPayPalGift}
+        handlePayPalError={handlePayPalError}
+        processGift={processGift}
+      />
+    </PayPalScriptProvider>
+  );
+}
+
+// Inner component for the modal content
+function GiftModalContent({
+  candidate,
+  event,
+  onClose,
+  pageColor,
+  session,
+  onGiftSuccess,
+  showSuccessAlert,
+  selectedGift,
+  setSelectedGift,
+  selectedPaymentMethod,
+  setSelectedPaymentMethod,
+  loading,
+  setLoading,
+  showConfirmModal,
+  setShowConfirmModal,
+  showCustomAlert,
+  alertData,
+  userCountry,
+  userEmail,
+  showHandPointer,
+  isMobile,
+  paymentMethods,
+  displayPrice,
+  paypalProcessing,
+  paypalError,
+  handleSelectGift,
+  handleShowCustomAlert,
+  handleCloseCustomAlert,
+  handleGift,
+  processPayPalGift,
+  handlePayPalError,
+  processGift
+}) {
+  return (
     <>
       <motion.div
         initial={{ opacity: 0 }}
@@ -565,11 +875,16 @@ export default function GiftModal({ candidate, event, onClose, pageColor, sessio
                                 <div className="w-2.5 h-2.5 lg:w-4 lg:h-4 flex-shrink-0 relative">
                                   <Image
                                     src={
-                                      selectedPaymentMethod === "global_payment" 
-                                        ? "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/visamastercard.jpg"
-                                        : "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/paystack.png"
+                                      selectedPaymentMethod === "paypal"
+                                        ? "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/paypal.jpg"
+                                        : selectedPaymentMethod === "paystack"
+                                        ? "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/paystack.png"
+                                        : "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/visamastercard.jpg"
                                     }
-                                    alt={selectedPaymentMethod === "global_payment" ? "Pay with Card" : "Naira Payment"}
+                                    alt={
+                                      selectedPaymentMethod === "paypal" ? "Use USSD Card" :
+                                      selectedPaymentMethod === "paystack" ? "Naira Payment" : "Pay with Card"
+                                    }
                                     fill
                                     className="object-cover rounded"
                                     unoptimized
@@ -624,6 +939,43 @@ export default function GiftModal({ candidate, event, onClose, pageColor, sessio
                           </p>
                         </div>
                       </div>
+                      
+                      {/* PayPal Button Section - Only show when PayPal is selected */}
+                      {selectedPaymentMethod === "paypal" && selectedGift && (
+                        <div className="mt-4">
+                          <div className="mb-2">
+                            <p className="text-xs text-gray-400 text-center">
+                              Pay with USSD card via PayPal
+                            </p>
+                          </div>
+                          
+                          {/* PayPal Error Message */}
+                          {paypalError && (
+                            <div className="mb-3 p-2 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                              <p className="text-xs font-medium">{paypalError}</p>
+                            </div>
+                          )}
+                          
+                          {/* PayPal Button */}
+                          <PayPalGiftButton
+                            selectedGift={selectedGift}
+                            candidate={candidate}
+                            event={event}
+                            userEmail={userEmail}
+                            onSuccess={processPayPalGift}
+                            onError={handlePayPalError}
+                          />
+                          
+                          {paypalProcessing && (
+                            <div className="mt-2 text-center">
+                              <div className="inline-flex items-center gap-2 text-xs text-gray-400">
+                                <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                                Processing PayPal payment...
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </motion.div>
                   )}
 
@@ -643,8 +995,11 @@ export default function GiftModal({ candidate, event, onClose, pageColor, sessio
                           {selectedPaymentMethod === "paystack" && userCountry === "NG" && (
                             <li>• Prices displayed in Nigerian Naira (₦) at $1 = ₦1500</li>
                           )}
-                          {selectedPaymentMethod !== "wallet" && selectedPaymentMethod !== "paystack" && (
+                          {(selectedPaymentMethod === "paypal" || selectedPaymentMethod === "global_payment") && (
                             <li>• Prices displayed in US Dollars ($)</li>
+                          )}
+                          {selectedPaymentMethod === "paypal" && (
+                            <li>• PayPal accepts USSD cards and other payment methods</li>
                           )}
                         </ul>
                       </div>
@@ -687,7 +1042,7 @@ export default function GiftModal({ candidate, event, onClose, pageColor, sessio
                             />
                           </div>
                           <span className="text-xs lg:text-sm text-white">
-                            {method.id === "global_payment" ? "Pay with Card" : method.label}
+                            {method.label}
                           </span>
                         </motion.label>
                       ))}
@@ -697,7 +1052,7 @@ export default function GiftModal({ candidate, event, onClose, pageColor, sessio
                     <div className="mt-3 lg:mt-4 p-2 lg:p-3 bg-gray-700/30 rounded-lg">
                       <p className="text-xs text-gray-300">
                         {selectedPaymentMethod === "wallet" && "Pay directly from your token wallet balance"}
-                        {selectedPaymentMethod === "global_payment" && "Pay with international credit/debit cards (Coming Soon)"}
+                        {selectedPaymentMethod === "paypal" && "Pay with USSD card via PayPal (No login required)"}
                         {selectedPaymentMethod === "paystack" && userCountry === "NG" && "Pay with Nigerian cards and bank transfers"}
                         {selectedPaymentMethod === "paystack" && userCountry !== "NG" && "Pay with international payment methods"}
                       </p>
@@ -713,35 +1068,48 @@ export default function GiftModal({ candidate, event, onClose, pageColor, sessio
             <div className="flex gap-2 lg:gap-3">
               <button
                 onClick={onClose}
-                disabled={loading}
+                disabled={loading || paypalProcessing}
                 className="flex-1 px-4 lg:px-6 py-2 lg:py-3 bg-gray-700 rounded-xl text-sm font-semibold text-white hover:bg-gray-600 disabled:opacity-50 transition-all duration-300"
               >
                 Cancel
               </button>
-              <button
-                onClick={handleGift}
-                disabled={!selectedGift || loading}
-                className="flex-1 px-4 lg:px-6 py-2 lg:py-3 rounded-xl text-sm font-semibold text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ 
-                  backgroundColor: !selectedGift || loading ? '#6B7280' : (selectedGift?.color || pageColor),
-                  opacity: !selectedGift || loading ? 0.5 : 1
-                }}
-              >
-                {loading ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span className="text-xs lg:text-sm">Processing...</span>
-                  </div>
-                ) : (
-                  `Send ${selectedGift?.name || 'Gift'}`
-                )}
-              </button>
+              {/* Hide main gift button when PayPal is selected (PayPal button is shown above) */}
+              {selectedPaymentMethod !== "paypal" && (
+                <button
+                  onClick={handleGift}
+                  disabled={!selectedGift || loading || paypalProcessing}
+                  className="flex-1 px-4 lg:px-6 py-2 lg:py-3 rounded-xl text-sm font-semibold text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ 
+                    backgroundColor: !selectedGift || loading ? '#6B7280' : (selectedGift?.color || pageColor),
+                    opacity: !selectedGift || loading ? 0.5 : 1
+                  }}
+                >
+                  {loading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs lg:text-sm">Processing...</span>
+                    </div>
+                  ) : (
+                    `Send ${selectedGift?.name || 'Gift'}`
+                  )}
+                </button>
+              )}
+              {/* Show a placeholder button when PayPal is selected to maintain layout */}
+              {selectedPaymentMethod === "paypal" && (
+                <button
+                  disabled
+                  className="flex-1 px-4 lg:px-6 py-2 lg:py-3 rounded-xl text-sm font-semibold text-white opacity-50 cursor-default"
+                  style={{ backgroundColor: '#6B7280' }}
+                >
+                  Use USSD Card Button Above
+                </button>
+              )}
             </div>
           </div>
         </motion.div>
       </motion.div>
 
-      {/* Confirm Modal */}
+      {/* Confirm Modal (for non-PayPal methods) */}
       <CustomAlert
         isOpen={showConfirmModal}
         onClose={() => !loading && setShowConfirmModal(false)}
@@ -770,4 +1138,4 @@ export default function GiftModal({ candidate, event, onClose, pageColor, sessio
       />
     </>
   );
-} 
+}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useParams } from "next/navigation";
+import { usePathname, useParams, useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import { LayoutGrid, List as ListIcon, Search, Home, User, Calendar } from "lucide-react";
 import { motion } from "framer-motion";
@@ -16,19 +16,33 @@ export default function EventsPage() {
   const [search, setSearch] = useState("");
   const [isList, setIsList] = useState(false);
   const [userId, setUserId] = useState(null);
-  const [loading, setLoading] = useState(true); // Add loading state
+  const [userRole, setUserRole] = useState(null); // New: track user role
+  const [loading, setLoading] = useState(true);
+  const [dashboardLoading, setDashboardLoading] = useState(false); // New: loading state for dashboard click
   const pathname = usePathname();
   const params = useParams();
+  const router = useRouter(); // Add router for navigation
 
   const LOGO_URL =
     "https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/assets/logo.png";
 
-  // ✅ Get current user ID for dashboard link
+  // ✅ Get current user ID and role
   useEffect(() => {
     const getCurrentUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUserId(user.id);
+        
+        // Fetch user role from database
+        const { data: userData, error } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+          
+        if (!error && userData) {
+          setUserRole(userData.role);
+        }
       }
     };
     getCurrentUser();
@@ -37,12 +51,12 @@ export default function EventsPage() {
   // ✅ Fetch launched events where active is TRUE
   useEffect(() => {
     const fetchEvents = async () => {
-      setLoading(true); // Start loading
+      setLoading(true);
       const { data, error } = await supabase
         .from("events")
         .select("id, name, description, type, thumbnail, logo, page_color")
         .eq("launch", true)
-        .eq("active", true) // ✅ Only fetch active events
+        .eq("active", true)
         .order("created_at", { ascending: false });
 
       if (error) console.error("Error fetching events:", error.message);
@@ -50,7 +64,7 @@ export default function EventsPage() {
         setEvents(data || []);
         setFilteredEvents(data || []);
       }
-      setLoading(false); // End loading
+      setLoading(false);
     };
 
     fetchEvents();
@@ -73,6 +87,56 @@ export default function EventsPage() {
     );
   }, [search, events]);
 
+  // ✅ Function to handle dashboard icon click
+  const handleDashboardClick = async (e) => {
+    e.preventDefault();
+    
+    // Check if user is logged in
+    if (!userId) {
+      router.push('/login');
+      return;
+    }
+    
+    setDashboardLoading(true);
+    
+    try {
+      // If we already have the role, use it
+      if (userRole) {
+        if (userRole === 'fans') {
+          router.push(`/fansdashboard/${userId}`);
+        } else if (userRole === 'publisher') {
+          router.push(`/publisherdashboard/${userId}`);
+        } else {
+          // Default fallback
+          router.push(`/publisherdashboard/${userId}`);
+        }
+      } else {
+        // Fetch role if not already loaded
+        const { data: userData, error } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', userId)
+          .single();
+          
+        if (error) {
+          console.error('Error fetching user role:', error);
+          // Default to publisher dashboard if can't determine role
+          router.push(`/publisherdashboard/${userId}`);
+        } else if (userData.role === 'fans') {
+          router.push(`/fansdashboard/${userId}`);
+        } else {
+          router.push(`/publisherdashboard/${userId}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error navigating to dashboard:', error);
+      // Fallback to publisher dashboard
+      router.push(`/publisherdashboard/${userId}`);
+    } finally {
+      setDashboardLoading(false);
+    }
+  };
+
   // Function to truncate description to 30 words
   const truncateDescription = (text, wordLimit = 30) => {
     if (!text) return "Join us for an unforgettable experience.";
@@ -85,14 +149,28 @@ export default function EventsPage() {
     return words.slice(0, wordLimit).join(' ') + '...';
   };
 
-  // Navigation items - Fixed dashboard link (Desktop only)
+  // Navigation items - Updated to handle dynamic routing
   const navItems = [
-    { href: "/", label: "Home", icon: Home },
-    { href: "/events", label: "Events", icon: Calendar },
     { 
-      href: userId ? `/publisherdashboard/${userId}` : "/login", 
+      id: 'home',
+      href: "/", 
+      label: "Home", 
+      icon: Home,
+      onClick: null // No special handling needed
+    },
+    { 
+      id: 'events',
+      href: "/events", 
+      label: "Events", 
+      icon: Calendar,
+      onClick: null // No special handling needed
+    },
+    { 
+      id: 'dashboard',
+      href: "#", // Use # since we'll handle the click manually
       label: "Dashboard", 
-      icon: User 
+      icon: User,
+      onClick: handleDashboardClick // Use our custom handler
     },
   ];
 
@@ -467,9 +545,36 @@ export default function EventsPage() {
                       {navItems.map((item) => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href;
+                        
+                        // Special handling for dashboard icon
+                        if (item.id === 'dashboard') {
+                          return (
+                            <motion.button
+                              key={item.id}
+                              onClick={item.onClick}
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              disabled={dashboardLoading}
+                              className={`p-3 rounded-xl transition-all duration-200 relative ${
+                                isActive
+                                  ? "bg-yellow-500 text-white shadow-md"
+                                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                              } ${dashboardLoading ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
+                              title={item.label}
+                            >
+                              {dashboardLoading ? (
+                                <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Icon size={20} />
+                              )}
+                            </motion.button>
+                          );
+                        }
+                        
+                        // Regular links for home and events
                         return (
                           <Link
-                            key={item.href}
+                            key={item.id}
                             href={item.href}
                             className={`p-3 rounded-xl transition-all duration-200 ${
                               isActive
@@ -541,25 +646,45 @@ export default function EventsPage() {
         </div>
       </div>
 
-      {/* ✅ Mobile Layout - NAVIGATION REMOVED */}
+      {/* ✅ Mobile Layout */}
       <div className="md:hidden">
-        {/* Header for Mobile - NO NAVIGATION */}
+        {/* Header for Mobile */}
         <div className="bg-white border-b border-gray-200 px-4 py-4">
-          {/* REMOVED: Mobile Navigation Section */}
-
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-2xl font-bold text-gray-900">All Events</h1>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setIsList(!isList)}
-              className="p-2 rounded-lg border border-gray-300 bg-white hover:bg-yellow-50 transition-all duration-200"
-            >
-              {isList ? (
-                <LayoutGrid className="w-5 h-5 text-yellow-600" />
-              ) : (
-                <ListIcon className="w-5 h-5 text-yellow-600" />
-              )}
-            </motion.button>
+            
+            {/* Mobile Navigation Icons - Only Dashboard Icon */}
+            <div className="flex items-center gap-2">
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleDashboardClick}
+                disabled={dashboardLoading}
+                className={`p-2 rounded-lg ${
+                  dashboardLoading 
+                    ? 'bg-gray-100 cursor-not-allowed' 
+                    : 'bg-white hover:bg-gray-50'
+                } border border-gray-300 transition-all duration-200`}
+                title="Dashboard"
+              >
+                {dashboardLoading ? (
+                  <div className="w-4 h-4 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <User className="w-4 h-4 text-yellow-600" />
+                )}
+              </motion.button>
+              
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsList(!isList)}
+                className="p-2 rounded-lg border border-gray-300 bg-white hover:bg-yellow-50 transition-all duration-200"
+              >
+                {isList ? (
+                  <LayoutGrid className="w-4 h-4 text-yellow-600" />
+                ) : (
+                  <ListIcon className="w-4 h-4 text-yellow-600" />
+                )}
+              </motion.button>
+            </div>
           </div>
 
           {/* Mobile Search */}

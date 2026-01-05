@@ -3,14 +3,11 @@ import { Award, Vote, Gift, Eye } from "lucide-react";
 
 export default function CandidateStats({ candidate, event, session, pageColor, onVoteClick, onGiftClick }) {
   
-  // Check if current user is event owner
-  const isEventOwner = session?.user?.id === event?.user_id;
-
-  // Helper functions to check visibility
-  const shouldShowVotes = () => candidate?.votes_toggle === true || isEventOwner;
-  const shouldShowGifts = () => candidate?.gifts_toggle === true || isEventOwner;
-  const shouldShowPoints = () => candidate?.points_toggle === true || isEventOwner;
-  const shouldShowViews = () => candidate?.views_toggle === true || isEventOwner;
+  // Helper functions to check visibility - only show if toggle is TRUE
+  const shouldShowVotes = () => candidate?.votes_toggle === true;
+  const shouldShowGifts = () => candidate?.gifts_toggle === true;
+  const shouldShowPoints = () => candidate?.points_toggle === true;
+  const shouldShowViews = () => candidate?.views_toggle === true;
 
   // Format points to show 1 decimal place
   const formatPoints = (points) => {
@@ -18,13 +15,87 @@ export default function CandidateStats({ candidate, event, session, pageColor, o
     return Number(points).toFixed(1);
   };
 
-  const StatItem = ({ icon: Icon, label, value, visible = true }) => (
-    <div className={`flex flex-col items-center p-3 rounded-xl bg-white/80 backdrop-blur-sm border border-white/20 ${!visible ? 'opacity-50' : ''}`}>
+  // Calculate points if needed
+  const totalVotes = candidate?.votes || 0;
+  const totalGifts = candidate?.gifts || 0;
+  const points = candidate?.points || (totalVotes + totalGifts) / 10;
+
+  // Create array of visible stats
+  const visibleStats = [];
+
+  // Only add votes if toggle is TRUE
+  if (shouldShowVotes()) {
+    visibleStats.push({
+      id: 'votes',
+      icon: Vote,
+      label: "Total Votes",
+      value: totalVotes.toLocaleString(),
+      mobileLabel: "Votes"
+    });
+  }
+
+  // Only add gifts if toggle is TRUE
+  if (shouldShowGifts()) {
+    visibleStats.push({
+      id: 'gifts',
+      icon: Gift,
+      label: "Gifts Received",
+      value: totalGifts.toLocaleString(),
+      mobileLabel: "Gifts"
+    });
+  }
+
+  // Only add points if toggle is TRUE
+  if (shouldShowPoints()) {
+    visibleStats.push({
+      id: 'points',
+      icon: Award,
+      label: "Total Points",
+      value: formatPoints(points),
+      mobileLabel: "Points"
+    });
+  }
+
+  // Only add views if toggle is TRUE
+  if (shouldShowViews()) {
+    visibleStats.push({
+      id: 'views',
+      icon: Eye,
+      label: "Profile Views",
+      value: candidate?.views?.toLocaleString() || 0,
+      mobileLabel: "Views"
+    });
+  }
+
+  // Determine grid columns based on number of visible stats
+  const getGridColsClass = () => {
+    if (visibleStats.length === 0) return 'grid-cols-1';
+    if (visibleStats.length === 1) return 'grid-cols-1';
+    if (visibleStats.length === 2) return 'grid-cols-2';
+    if (visibleStats.length === 3) return 'grid-cols-3';
+    return 'grid-cols-4';
+  };
+
+  const StatItem = ({ icon: Icon, label, value, mobileLabel }) => (
+    <div className="flex flex-col items-center p-3 rounded-xl bg-white/80 backdrop-blur-sm border border-white/20">
       <div className="flex items-center gap-2 mb-1">
         <Icon className="w-4 h-4" style={{ color: pageColor }} />
-        <span className="text-xs text-gray-700 font-medium">{label}</span>
+        <span className="text-xs text-gray-700 font-medium md:hidden">{mobileLabel}</span>
+        <span className="text-xs text-gray-700 font-medium hidden md:inline">{label}</span>
       </div>
-      <span className="font-bold text-gray-900 text-sm">{visible ? value : 'Hidden'}</span>
+      <span className="font-bold text-gray-900 text-sm">{value}</span>
+    </div>
+  );
+
+  const DesktopStatItem = ({ icon: Icon, label, value }) => (
+    <div className="flex items-center justify-between p-3 rounded-xl bg-white/80 backdrop-blur-sm border border-white/20">
+      <div className="flex items-center gap-2">
+        <Icon className="w-4 h-4" style={{ color: pageColor }} />
+        <span className="text-sm text-gray-700 font-medium">{label}</span>
+      </div>
+      <span className="font-bold text-gray-900 text-sm">
+        {value}
+      </span>
     </div>
   );
 
@@ -32,81 +103,66 @@ export default function CandidateStats({ candidate, event, session, pageColor, o
     <div className="relative bg-white rounded-2xl shadow-lg p-4 border border-gray-100 overflow-hidden">
       {/* Background Image with reduced opacity */}
       <div className="absolute inset-0 opacity-85">
-  <img
-    src="https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/gleedz055.jpg"
-    alt="Stats background"
-    className="w-full h-full object-cover"
-  />
-</div>
+        <img
+          src="https://mttimgygxzfqzmnirfyq.supabase.co/storage/v1/object/public/gleedzasset/gleedz055.jpg"
+          alt="Stats background"
+          className="w-full h-full object-cover"
+        />
+      </div>
       
       {/* Content */}
       <div className="relative z-10">
         <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
           <Award className="w-4 h-4" style={{ color: pageColor }} />
-          Candidate Stats
+          Candidate Result Stats
         </h3>
         
-        {/* Mobile Grid Layout */}
-        <div className="block md:hidden">
-          <div className="grid grid-cols-2 gap-3">
-            <StatItem 
-              icon={Vote} 
-              label="Votes" 
-              value={candidate?.votes?.toLocaleString() || 0} 
-              visible={shouldShowVotes()} 
-            />
-            <StatItem 
-              icon={Gift} 
-              label="Gifts" 
-              value={candidate?.gifts?.toLocaleString() || 0} 
-              visible={shouldShowGifts()} 
-            />
-            <StatItem 
-              icon={Award} 
-              label="Points" 
-              value={formatPoints(candidate?.points)} 
-              visible={shouldShowPoints()} 
-            />
-            <StatItem 
-              icon={Eye} 
-              label="Views" 
-              value={candidate?.views?.toLocaleString() || 0} 
-              visible={shouldShowViews()} 
-            />
+        {/* Show message if no stats are visible */}
+        {visibleStats.length === 0 && (
+          <div className="p-4 rounded-xl bg-white/80 backdrop-blur-sm border border-white/20 text-center">
+            <p className="text-sm text-gray-700">Live result stats unlock soon.</p>
           </div>
-        </div>
+        )}
+
+        {/* Mobile Grid Layout */}
+        {visibleStats.length > 0 && (
+          <div className="block md:hidden">
+            <div className={`grid ${getGridColsClass()} gap-3`}>
+              {visibleStats.map((stat) => (
+                <StatItem 
+                  key={stat.id}
+                  icon={stat.icon}
+                  label={stat.label}
+                  value={stat.value}
+                  mobileLabel={stat.mobileLabel}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Desktop Layout */}
-        <div className="hidden md:block space-y-3">
-          {[
-            { icon: Vote, label: "Total Votes", value: candidate?.votes?.toLocaleString() || 0, visible: shouldShowVotes() },
-            { icon: Gift, label: "Gifts Received", value: candidate?.gifts?.toLocaleString() || 0, visible: shouldShowGifts() },
-            { icon: Award, label: "Total Points", value: formatPoints(candidate?.points), visible: shouldShowPoints() },
-            { icon: Eye, label: "Profile Views", value: candidate?.views?.toLocaleString() || 0, visible: shouldShowViews() },
-          ].map((stat, index) => (
-            <div 
-              key={index}
-              className={`flex items-center justify-between p-3 rounded-xl bg-white/80 backdrop-blur-sm border border-white/20 ${!stat.visible ? 'opacity-50' : ''}`}
-            >
-              <div className="flex items-center gap-2">
-                <stat.icon className="w-4 h-4" style={{ color: pageColor }} />
-                <span className="text-sm text-gray-700 font-medium">{stat.label}</span>
-              </div>
-              <span className="font-bold text-gray-900 text-sm">
-                {stat.visible ? stat.value : 'Hidden'}
-              </span>
-            </div>
-          ))}
-        </div>
+        {visibleStats.length > 0 && (
+          <div className="hidden md:block space-y-3">
+            {visibleStats.map((stat) => (
+              <DesktopStatItem 
+                key={stat.id}
+                icon={stat.icon}
+                label={stat.label}
+                value={stat.value}
+              />
+            ))}
+          </div>
+        )}
         
-        {/* Action Buttons - Smaller */}
+        {/* Action Buttons */}
         <div className="flex gap-2 mt-6">
           <motion.button 
             onClick={onVoteClick}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             className="flex-1 flex items-center justify-center gap-2 py-2 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-xs"
-            style={{ backgroundColor: pageColor }}
+            style={{ backgroundColor: '#10B981' }} // Green color for vote button
           >
             <Vote className="w-3 h-3" />
             Vote Now
@@ -116,8 +172,8 @@ export default function CandidateStats({ candidate, event, session, pageColor, o
             onClick={onGiftClick}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="flex-1 flex items-center justify-center gap-2 py-2 text-white font-semibold rounded-xl border transition-all duration-300 text-xs"
-            style={{ borderColor: pageColor, backgroundColor: `${pageColor}08` }}
+            className="flex-1 flex items-center justify-center gap-2 py-2 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-xs"
+            style={{ backgroundColor: '#F59E0B' }} // Yellow 500 color for gift button
           >
             <Gift className="w-3 h-3" />
             Send Gift

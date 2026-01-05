@@ -9,6 +9,21 @@ const nextConfig = {
       },
     ],
   },
+  compress: true,
+  poweredByHeader: false,
+  generateEtags: true,
+  reactStrictMode: true,
+  
+  // Redirects (optional - keep simple)
+  async redirects() {
+    return [
+      {
+        source: '/home',
+        destination: '/',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

@@ -64,6 +64,17 @@ export default function DefaultEventPage({ event }) {
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
 
+  // ---------- Check if any candidate has scoring enabled ----------
+  const hasAnyScoringEnabled = () => {
+    if (candidates.length === 0) return false;
+    
+    return candidates.some(candidate => 
+      candidate.votes_toggle === true || 
+      candidate.gifts_toggle === true || 
+      candidate.points_toggle === true
+    );
+  };
+
   // ---------- fetch hero slides based on screen size ----------
   useEffect(() => {
     const fetchHeroSlides = () => {
@@ -675,6 +686,7 @@ export default function DefaultEventPage({ event }) {
   const hasContact = contactInfo !== null;
   const hasSponsors = sponsors.length > 0;
   const hasFeaturePosts = featurePosts.length > 0;
+  const scoringEnabled = hasAnyScoringEnabled();
 
   // Calculate grid layout based on available content
   const getGalleryGridClass = () => {
@@ -989,13 +1001,15 @@ export default function DefaultEventPage({ event }) {
                     )}
                   </div>
                   
-                  {/* Rank Badge */}
-                  <div 
-                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center shadow-lg border-2 border-white text-xs font-bold text-white"
-                    style={{ backgroundColor: pageColor }}
-                  >
-                    {index + 1}
-                  </div>
+                  {/* Rank Badge - Only show if scoring is enabled */}
+                  {scoringEnabled && (
+                    <div 
+                      className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center shadow-lg border-2 border-white text-xs font-bold text-white"
+                      style={{ backgroundColor: pageColor }}
+                    >
+                      {index + 1}
+                    </div>
+                  )}
                 </div>
                 
                 {/* Candidate Info */}
@@ -1021,23 +1035,36 @@ export default function DefaultEventPage({ event }) {
                     </button>
                   </div>
                   
-                  {/* Points Display */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      <Star className="w-3 h-3" style={{ color: pageColor }} />
-                      <span className="font-bold text-xs" style={{ color: pageColor }}>
-                        {candidate.points?.toLocaleString() || '0'} pts
-                      </span>
+                  {/* Points Display - Only show if scoring is enabled and candidate has points_toggle true */}
+                  {scoringEnabled && candidate.points_toggle === true && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <Star className="w-3 h-3" style={{ color: pageColor }} />
+                        <span className="font-bold text-xs" style={{ color: pageColor }}>
+                          {candidate.points?.toLocaleString() || '0'} pts
+                        </span>
+                      </div>
+                      
+                      {candidate.contest_number && (
+                        <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full border"
+                          style={{ borderColor: pageColor, color: pageColor, backgroundColor: `${pageColor}08` }}
+                        >
+                          #{candidate.contest_number}
+                        </span>
+                      )}
                     </div>
-                    
-                    {candidate.contest_number && (
+                  )}
+
+                  {/* If no points display, show contest number separately */}
+                  {(!scoringEnabled || candidate.points_toggle !== true) && candidate.contest_number && (
+                    <div className="flex justify-end">
                       <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full border"
                         style={{ borderColor: pageColor, color: pageColor, backgroundColor: `${pageColor}08` }}
                       >
                         #{candidate.contest_number}
                       </span>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -1289,13 +1316,15 @@ export default function DefaultEventPage({ event }) {
                           )}
                         </div>
                         
-                        {/* Rank Badge */}
-                        <div 
-                          className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center shadow-lg border-2 border-white text-xs font-bold text-white"
-                          style={{ backgroundColor: pageColor }}
-                        >
-                          {index + 1}
-                        </div>
+                        {/* Rank Badge - Only show if scoring is enabled */}
+                        {scoringEnabled && (
+                          <div 
+                            className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center shadow-lg border-2 border-white text-xs font-bold text-white"
+                            style={{ backgroundColor: pageColor }}
+                          >
+                            {index + 1}
+                          </div>
+                        )}
                       </div>
                       
                       {/* Candidate Info */}
@@ -1321,23 +1350,36 @@ export default function DefaultEventPage({ event }) {
                           </button>
                         </div>
                         
-                        {/* Points Display */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1">
-                            <Star className="w-3 h-3" style={{ color: pageColor }} />
-                            <span className="font-bold text-xs" style={{ color: pageColor }}>
-                              {candidate.points?.toLocaleString() || '0'} pts
-                            </span>
+                        {/* Points Display - Only show if scoring is enabled and candidate has points_toggle true */}
+                        {scoringEnabled && candidate.points_toggle === true && (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1">
+                              <Star className="w-3 h-3" style={{ color: pageColor }} />
+                              <span className="font-bold text-xs" style={{ color: pageColor }}>
+                                {candidate.points?.toLocaleString() || '0'} pts
+                              </span>
+                            </div>
+                            
+                            {candidate.contest_number && (
+                              <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full border"
+                                style={{ borderColor: pageColor, color: pageColor, backgroundColor: `${pageColor}08` }}
+                              >
+                                #{candidate.contest_number}
+                              </span>
+                            )}
                           </div>
-                          
-                          {candidate.contest_number && (
+                        )}
+
+                        {/* If no points display, show contest number separately */}
+                        {(!scoringEnabled || candidate.points_toggle !== true) && candidate.contest_number && (
+                          <div className="flex justify-end">
                             <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full border"
                               style={{ borderColor: pageColor, color: pageColor, backgroundColor: `${pageColor}08` }}
                             >
                               #{candidate.contest_number}
                             </span>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </motion.div>

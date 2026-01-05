@@ -86,7 +86,8 @@ export default function EventVotePage() {
                 candidate.id === payload.new.id ? payload.new : candidate
               ).sort((a, b) => (b.points || 0) - (a.points || 0));
               
-              if (payload.new.votes > payload.old.votes && payload.new.votes_toggle) {
+              // Check if votes are enabled before showing vote popup
+              if (payload.new.votes_toggle !== false && payload.new.votes > payload.old.votes && payload.new.votes_toggle) {
                 const voteIncrease = payload.new.votes - payload.old.votes;
                 addPopup({
                   type: 'vote',
@@ -97,7 +98,8 @@ export default function EventVotePage() {
                 });
               }
               
-              if (payload.new.gifts > payload.old.gifts && payload.new.gifts_toggle) {
+              // Check if gifts are enabled before showing gift popup
+              if (payload.new.gifts_toggle !== false && payload.new.gifts > payload.old.gifts && payload.new.gifts_toggle) {
                 const giftIncrease = payload.new.gifts - payload.old.gifts;
                 addPopup({
                   type: 'gift',
@@ -196,6 +198,15 @@ export default function EventVotePage() {
     }, 3000);
   };
 
+  // Check if any scoring feature is enabled
+  const hasAnyScoringEnabled = () => {
+    return candidates.some(candidate => 
+      candidate.votes_toggle === true || 
+      candidate.gifts_toggle === true || 
+      candidate.points_toggle === true
+    );
+  };
+
   const isEventOwner = session?.user?.id === event?.user_id;
 
   if (loading) {
@@ -210,6 +221,7 @@ export default function EventVotePage() {
   }
 
   const pageColor = event?.page_color || "#D4AF37";
+  const scoringEnabled = hasAnyScoringEnabled();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 pt-20">
@@ -282,7 +294,8 @@ export default function EventVotePage() {
         </div>
       </div>
 
-      {candidates.length > 0 && (
+      {/* Only show stats section if scoring is enabled */}
+      {scoringEnabled && candidates.length > 0 && (
         <section className="bg-white border-b border-gray-200 shadow-sm mt-4">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
             <div className="flex flex-wrap justify-between items-center py-4 gap-3">
@@ -291,29 +304,38 @@ export default function EventVotePage() {
                   <div className="font-bold text-gray-900">{candidates.length}</div>
                   <div className="text-gray-600">Candidates</div>
                 </div>
-                <div className="text-center">
-                  <div className="font-bold text-gray-900">
-                    {candidates.reduce((total, candidate) => total + (candidate.votes || 0), 0).toLocaleString()}
+                {/* Only show votes if any candidate has votes_toggle enabled */}
+                {candidates.some(c => c.votes_toggle === true) && (
+                  <div className="text-center">
+                    <div className="font-bold text-gray-900">
+                      {candidates.reduce((total, candidate) => total + (candidate.votes_toggle === true ? (candidate.votes || 0) : 0), 0).toLocaleString()}
+                    </div>
+                    <div className="text-gray-600">Votes</div>
                   </div>
-                  <div className="text-gray-600">Votes</div>
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-gray-900">
-                    {candidates.reduce((total, candidate) => total + (candidate.gifts || 0), 0).toLocaleString()}
+                )}
+                {/* Only show gifts if any candidate has gifts_toggle enabled */}
+                {candidates.some(c => c.gifts_toggle === true) && (
+                  <div className="text-center">
+                    <div className="font-bold text-gray-900">
+                      {candidates.reduce((total, candidate) => total + (candidate.gifts_toggle === true ? (candidate.gifts || 0) : 0), 0).toLocaleString()}
+                    </div>
+                    <div className="text-gray-600">Gifts</div>
                   </div>
-                  <div className="text-gray-600">Gifts</div>
-                </div>
+                )}
               </div>
               
-              <button 
-                onClick={openRankingModal}
-                className="flex items-center gap-2 px-4 py-2 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 text-sm"
-                style={{ backgroundColor: pageColor }}
-              >
-                <TrendingUp className="w-4 h-4" />
-                <span>Live Ranking</span>
-                <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
-              </button>
+              {/* Only show ranking button if scoring is enabled */}
+              {scoringEnabled && (
+                <button 
+                  onClick={openRankingModal}
+                  className="flex items-center gap-2 px-4 py-2 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 text-sm"
+                  style={{ backgroundColor: pageColor }}
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  <span>Live Ranking</span>
+                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
+                </button>
+              )}
             </div>
           </div>
         </section>
@@ -355,6 +377,7 @@ export default function EventVotePage() {
                 eventId={eventId}
                 rank={candidates.findIndex(c => c.id === candidate.id) + 1}
                 pageColor={pageColor}
+                scoringEnabled={scoringEnabled}
               />
             ))}
           </div>
@@ -367,6 +390,7 @@ export default function EventVotePage() {
                 eventId={eventId}
                 rank={candidates.findIndex(c => c.id === candidate.id) + 1}
                 pageColor={pageColor}
+                scoringEnabled={scoringEnabled}
               />
             ))}
           </div>
@@ -374,7 +398,7 @@ export default function EventVotePage() {
       </main>
 
       <AnimatePresence>
-        {showRankingModal && (
+        {showRankingModal && scoringEnabled && (
           <RankingModal 
             rankingData={rankingData}
             onClose={() => setShowRankingModal(false)}
@@ -383,6 +407,7 @@ export default function EventVotePage() {
             onPauseToggle={() => setIsRankingPaused(!isRankingPaused)}
             showPauseButton={isEventOwner}
             popups={popups}
+            scoringEnabled={scoringEnabled}
           />
         )}
       </AnimatePresence>
@@ -390,15 +415,16 @@ export default function EventVotePage() {
   );
 }
 
-function CandidateCard({ candidate, eventId, rank, pageColor }) {
+function CandidateCard({ candidate, eventId, rank, pageColor, scoringEnabled }) {
   const [imageError, setImageError] = useState(false);
   
   // Calculate points: (votes + gifts) / 10
   const points = ((candidate.votes || 0) + (candidate.gifts || 0)) / 10;
   
   // Check toggle settings - default to true if null/undefined
-  const showVotes = candidate.votes_toggle !== false;
-  const showGifts = candidate.gifts_toggle !== false;
+  const showVotes = candidate.votes_toggle === true;
+  const showGifts = candidate.gifts_toggle === true;
+  const showPoints = candidate.points_toggle === true;
 
   return (
     <motion.div
@@ -428,38 +454,43 @@ function CandidateCard({ candidate, eventId, rank, pageColor }) {
             </div>
           )}
           
-          <div 
-            className="absolute top-2 left-2 w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-lg border border-white/20 backdrop-blur-sm"
-            style={{ backgroundColor: pageColor }}
-          >
-            {rank}
-          </div>
+          {/* Only show rank if scoring is enabled */}
+          {scoringEnabled && (
+            <div 
+              className="absolute top-2 left-2 w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs sm:text-sm shadow-lg border border-white/20 backdrop-blur-sm"
+              style={{ backgroundColor: pageColor }}
+            >
+              {rank}
+            </div>
+          )}
           
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
           
-          {/* Conditionally render vote and gift counts */}
-          <div className="absolute bottom-2 left-2 right-2">
-            <div className="flex items-center justify-between text-white text-xs">
-              {/* Show votes only if votes_toggle is true */}
-              {showVotes && (
-                <div className="flex items-center gap-1">
-                  <Vote className="w-3 h-3" />
-                  <span className="font-semibold">{candidate.votes?.toLocaleString() || 0}</span>
-                </div>
-              )}
-              
-              {/* Show gifts only if gifts_toggle is true */}
-              {showGifts && (
-                <div className="flex items-center gap-1">
-                  <Gift className="w-3 h-3" />
-                  <span className="font-semibold">{candidate.gifts?.toLocaleString() || 0}</span>
-                </div>
-              )}
-              
-              {/* If both are hidden, show empty space to maintain layout */}
-              {!showVotes && !showGifts && <div />}
+          {/* Conditionally render vote and gift counts if scoring is enabled */}
+          {scoringEnabled && (showVotes || showGifts) && (
+            <div className="absolute bottom-2 left-2 right-2">
+              <div className="flex items-center justify-between text-white text-xs">
+                {/* Show votes only if votes_toggle is true */}
+                {showVotes && (
+                  <div className="flex items-center gap-1">
+                    <Vote className="w-3 h-3" />
+                    <span className="font-semibold">{candidate.votes?.toLocaleString() || 0}</span>
+                  </div>
+                )}
+                
+                {/* Show gifts only if gifts_toggle is true */}
+                {showGifts && (
+                  <div className="flex items-center gap-1">
+                    <Gift className="w-3 h-3" />
+                    <span className="font-semibold">{candidate.gifts?.toLocaleString() || 0}</span>
+                  </div>
+                )}
+                
+                {/* If both are hidden but scoring is enabled, show empty space to maintain layout */}
+                {!showVotes && !showGifts && <div />}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="p-3">
@@ -478,31 +509,34 @@ function CandidateCard({ candidate, eventId, rank, pageColor }) {
             )}
           </div>
 
-          {/* Points display */}
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-600">Points</span>
-            <span 
-              className="text-sm font-bold"
-              style={{ color: pageColor }}
-            >
-              {points.toFixed(1)}
-            </span>
-          </div>
+          {/* Points display - only show if scoring is enabled and points_toggle is true */}
+          {scoringEnabled && showPoints && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-600">Points</span>
+              <span 
+                className="text-sm font-bold"
+                style={{ color: pageColor }}
+              >
+                {points.toFixed(1)}
+              </span>
+            </div>
+          )}
         </div>
       </Link>
     </motion.div>
   );
 }
 
-function CandidateListItem({ candidate, eventId, rank, pageColor }) {
+function CandidateListItem({ candidate, eventId, rank, pageColor, scoringEnabled }) {
   const [imageError, setImageError] = useState(false);
   
   // Calculate points: (votes + gifts) / 10
   const points = ((candidate.votes || 0) + (candidate.gifts || 0)) / 10;
   
-  // Check toggle settings - default to true if null/undefined
-  const showVotes = candidate.votes_toggle !== false;
-  const showGifts = candidate.gifts_toggle !== false;
+  // Check toggle settings
+  const showVotes = candidate.votes_toggle === true;
+  const showGifts = candidate.gifts_toggle === true;
+  const showPoints = candidate.points_toggle === true;
 
   return (
     <motion.div
@@ -515,14 +549,17 @@ function CandidateListItem({ candidate, eventId, rank, pageColor }) {
         href={`/myevent/${eventId}/candidate/${candidate.id}`}
         className="flex items-center p-3"
       >
-        <div className="flex-shrink-0 w-10 text-center">
-          <div 
-            className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs mx-auto shadow-md"
-            style={{ backgroundColor: pageColor }}
-          >
-            {rank}
+        {/* Only show rank if scoring is enabled */}
+        {scoringEnabled && (
+          <div className="flex-shrink-0 w-10 text-center">
+            <div 
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs mx-auto shadow-md"
+              style={{ backgroundColor: pageColor }}
+            >
+              {rank}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex-shrink-0 w-12 h-16 sm:w-14 sm:h-20 mx-2 rounded-xl overflow-hidden border border-gray-200">
           {candidate.photo && !imageError ? (
@@ -560,38 +597,39 @@ function CandidateListItem({ candidate, eventId, rank, pageColor }) {
             )}
           </div>
           
-          {/* Conditionally render vote and gift counts */}
-          <div className="flex items-center gap-3 text-xs text-gray-600">
-            {showVotes && (
-              <div className="flex items-center gap-1">
-                <Vote className="w-3 h-3" style={{ color: pageColor }} />
-                <span className="font-medium text-gray-900">{candidate.votes || 0}</span>
-              </div>
-            )}
-            
-            {showGifts && (
-              <div className="flex items-center gap-1">
-                <Gift className="w-3 h-3" style={{ color: pageColor }} />
-                <span className="font-medium text-gray-900">{candidate.gifts || 0}</span>
-              </div>
-            )}
-            
-            {/* If both are hidden, show empty space to maintain layout */}
-            {!showVotes && !showGifts && <div className="h-4" />}
-          </div>
+          {/* Conditionally render vote and gift counts if scoring is enabled */}
+          {scoringEnabled && (showVotes || showGifts) && (
+            <div className="flex items-center gap-3 text-xs text-gray-600">
+              {showVotes && (
+                <div className="flex items-center gap-1">
+                  <Vote className="w-3 h-3" style={{ color: pageColor }} />
+                  <span className="font-medium text-gray-900">{candidate.votes || 0}</span>
+                </div>
+              )}
+              
+              {showGifts && (
+                <div className="flex items-center gap-1">
+                  <Gift className="w-3 h-3" style={{ color: pageColor }} />
+                  <span className="font-medium text-gray-900">{candidate.gifts || 0}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex-shrink-0 w-16 sm:w-20 text-right">
-          {/* Points display */}
-          <div className="mb-2">
-            <div className="text-xs text-gray-600">Points</div>
-            <div 
-              className="text-sm font-bold"
-              style={{ color: pageColor }}
-            >
-              {points.toFixed(1)}
+          {/* Points display - only show if scoring is enabled and points_toggle is true */}
+          {scoringEnabled && showPoints && (
+            <div className="mb-2">
+              <div className="text-xs text-gray-600">Points</div>
+              <div 
+                className="text-sm font-bold"
+                style={{ color: pageColor }}
+              >
+                {points.toFixed(1)}
+              </div>
             </div>
-          </div>
+          )}
           
           <div className="text-xs text-gray-600">
             View Details
@@ -602,7 +640,7 @@ function CandidateListItem({ candidate, eventId, rank, pageColor }) {
   );
 }
 
-function RankingModal({ rankingData, onClose, pageColor, isPaused, onPauseToggle, showPauseButton, popups }) {
+function RankingModal({ rankingData, onClose, pageColor, isPaused, onPauseToggle, showPauseButton, popups, scoringEnabled }) {
   const maxPoints = Math.max(...rankingData.map(c => c.points || 0), 1);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -616,6 +654,16 @@ function RankingModal({ rankingData, onClose, pageColor, isPaused, onPauseToggle
     
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Filter popups based on candidate toggle settings
+  const filteredPopups = popups.filter(popup => {
+    const candidate = rankingData.find(c => c.id === popup.candidateId);
+    if (!candidate) return false;
+    
+    if (popup.type === 'vote') return candidate.votes_toggle === true;
+    if (popup.type === 'gift') return candidate.gifts_toggle === true;
+    return false;
+  });
 
   // Mobile Version - Scrollable
   if (isMobile) {
@@ -709,14 +757,18 @@ function RankingModal({ rankingData, onClose, pageColor, isPaused, onPauseToggle
                   <div className="flex-1">
                     <h4 className="font-bold text-gray-900 text-sm">{rankingData[0].full_name}</h4>
                     <div className="flex items-center gap-2 text-xs text-gray-600 mt-1">
-                      <span className="flex items-center gap-1">
-                        <Vote className="w-3 h-3" />
-                        {rankingData[0].votes || 0}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Gift className="w-3 h-3" />
-                        {rankingData[0].gifts || 0}
-                      </span>
+                      {rankingData[0].votes_toggle === true && (
+                        <span className="flex items-center gap-1">
+                          <Vote className="w-3 h-3" />
+                          {rankingData[0].votes || 0}
+                        </span>
+                      )}
+                      {rankingData[0].gifts_toggle === true && (
+                        <span className="flex items-center gap-1">
+                          <Gift className="w-3 h-3" />
+                          {rankingData[0].gifts || 0}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">
@@ -837,14 +889,18 @@ function RankingModal({ rankingData, onClose, pageColor, isPaused, onPauseToggle
                         </h4>
                       </div>
                       <div className="flex items-center gap-3 text-xs text-gray-600">
-                        <span className="flex items-center gap-1">
-                          <Vote className="w-3 h-3" />
-                          {candidate.votes || 0}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Gift className="w-3 h-3" />
-                          {candidate.gifts || 0}
-                        </span>
+                        {candidate.votes_toggle === true && (
+                          <span className="flex items-center gap-1">
+                            <Vote className="w-3 h-3" />
+                            {candidate.votes || 0}
+                          </span>
+                        )}
+                        {candidate.gifts_toggle === true && (
+                          <span className="flex items-center gap-1">
+                            <Gift className="w-3 h-3" />
+                            {candidate.gifts || 0}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -862,7 +918,7 @@ function RankingModal({ rankingData, onClose, pageColor, isPaused, onPauseToggle
           {/* Live Popups - Mobile */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             <AnimatePresence>
-              {popups.map((popup) => (
+              {filteredPopups.map((popup) => (
                 <motion.div
                   key={popup.id}
                   initial={{ scale: 0, opacity: 0 }}
@@ -1173,14 +1229,18 @@ function RankingModal({ rankingData, onClose, pageColor, isPaused, onPauseToggle
                         )}
                       </div>
                       <div className="flex items-center gap-3 text-xs text-gray-600">
-                        <span className="flex items-center gap-1">
-                          <Vote className="w-3 h-3" />
-                          {candidate.votes || 0}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Gift className="w-3 h-3" />
-                          {candidate.gifts || 0}
-                        </span>
+                        {candidate.votes_toggle === true && (
+                          <span className="flex items-center gap-1">
+                            <Vote className="w-3 h-3" />
+                            {candidate.votes || 0}
+                          </span>
+                        )}
+                        {candidate.gifts_toggle === true && (
+                          <span className="flex items-center gap-1">
+                            <Gift className="w-3 h-3" />
+                            {candidate.gifts || 0}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -1200,7 +1260,7 @@ function RankingModal({ rankingData, onClose, pageColor, isPaused, onPauseToggle
         {/* Live Popups - Desktop */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <AnimatePresence>
-            {popups.map((popup) => (
+            {filteredPopups.map((popup) => (
               <motion.div
                 key={popup.id}
                 initial={{ scale: 0, opacity: 0 }}
