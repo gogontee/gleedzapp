@@ -1,4 +1,4 @@
-// app/layout.js - UPDATED with all favicons
+// app/layout.js - UPDATED with cache busting
 import { Inter } from 'next/font/google';
 import "./globals.css";
 import Providers from "./providers";
@@ -7,7 +7,7 @@ import { getServerSession } from "next-auth";
 
 const inter = Inter({ subsets: ['latin'] });
 
-// METADATA - Remove themeColor and viewport from here
+// METADATA - Keep icons here for SEO, but we'll also add manual links for cache control
 export const metadata = {
   title: 'Gleedz - Premium Event Platform',
   description: 'Gleedz is a platform for premium events.',
@@ -48,36 +48,35 @@ export const metadata = {
     images: ['https://gleedz.com/og-image.png'],
     creator: '@gleedz',
   },
-  // ALL ICONS RESTORED
+  // ICONS for metadata
   icons: {
     icon: [
-      { url: '/favicon.ico' },
-      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
-      { url: '/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/android-chrome-512x512.png', sizes: '512x512', type: 'image/png' },
+      { url: '/favicon.ico?v=4' },
+      { url: '/favicon-16x16.png?v=4', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png?v=4', sizes: '32x32', type: 'image/png' },
+      { url: '/android-chrome-192x192.png?v=4', sizes: '192x192', type: 'image/png' },
+      { url: '/android-chrome-512x512.png?v=4', sizes: '512x512', type: 'image/png' },
     ],
     apple: [
-      { url: '/apple-touch-icon.png' },
+      { url: '/apple-touch-icon.png?v=4' },
     ],
     other: [
       {
         rel: 'mask-icon',
-        url: '/safari-pinned-tab.svg',
+        url: '/safari-pinned-tab.svg?v=4',
         color: '#5bbad5',
       },
     ],
   },
-  manifest: '/site.webmanifest',
-  // REMOVED: themeColor and viewport from here
+  manifest: '/site.webmanifest?v=4',
   verification: {
-    google: 'YOUR_VERIFICATION_CODE_HERE', // Add your Google code
+    google: 'YOUR_VERIFICATION_CODE_HERE',
   },
 };
 
-// VIEWPORT - Add this separate export (Next.js 14 requirement)
+// VIEWPORT
 export const viewport = {
-  themeColor: '#D4AF37', // MOVED HERE
+  themeColor: '#D4AF37',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
@@ -89,11 +88,21 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="en" className={inter.className}>
       <head>
-        {/* Keep only essential tags */}
-        <link rel="canonical" href="https://gleedz.com" />
+        {/* MANUAL FAVICON LINKS WITH CACHE BUSTING - Most important */}
+        <link rel="icon" href="/favicon.ico?v=4" type="image/x-icon" />
+        <link rel="shortcut icon" href="/favicon.ico?v=4" type="image/x-icon" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=4" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=4" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=4" />
+        <link rel="manifest" href="/site.webmanifest?v=4" />
+        
+        {/* Theme colors */}
         <meta name="theme-color" content="#D4AF37" />
         <meta name="msapplication-TileColor" content="#D4AF37" />
-        <meta name="msapplication-config" content="/browserconfig.xml" />
+        <meta name="msapplication-config" content="/browserconfig.xml?v=4" />
+        
+        {/* Additional meta tags */}
+        <link rel="canonical" href="https://gleedz.com" />
         
         {/* Structured Data for Organization */}
         <script
