@@ -744,6 +744,46 @@ export default function DefaultEventPage({ event }) {
   };
 
   return (
+  <>
+    {/* Enhanced Schema.org data */}
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{
+        __html: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Event",
+          "name": event.name,
+          "description": event.description || event.tagline,
+          "image": [
+            event.logo,
+            event.thumbnail,
+            ...(event.hero_sections || []).map(hero => hero.src).filter(Boolean),
+            ...(event.main_gallery || []).slice(0, 3).map(g => g.image).filter(Boolean)
+          ].filter(Boolean),
+          "startDate": event.launch,
+          "endDate": event.end_date || event.launch,
+          "eventStatus": "https://schema.org/EventScheduled",
+          "url": `https://gleedz.com/events/${event.slug}`,
+          "location": {
+            "@type": "VirtualLocation",
+            "url": `https://gleedz.com/events/${event.slug}`
+          },
+          "organizer": {
+            "@type": "Organization",
+            "name": "Gleedz",
+            "url": "https://gleedz.com"
+          },
+          "offers": {
+            "@type": "Offer",
+            "url": `https://gleedz.com/events/${event.slug}`,
+            "price": event.reg_fee || "0",
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock",
+            "validFrom": new Date().toISOString()
+          }
+        })
+      }}
+    />
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gold-50 text-gray-900">
       {/* Use EventHeader Component */}
       <EventHeader event={event} />
@@ -752,46 +792,75 @@ export default function DefaultEventPage({ event }) {
       <div className="pt-18">
         
         {/* ENHANCED HERO SECTION WITH MOBILE/DESKTOP SUPPORT */}
-        <section className="relative w-full h-[50vh] md:h-[60vh] overflow-hidden">
-          <AnimatePresence mode="wait">
-            {heroSlides.map((slide, i) => {
-              if (i !== heroIndex) return null;
-              const slideSrc = slide.src || slide.url || '';
-              return slide.type === "video" ? (
-                <motion.video
-                  key={slide.id || i}
-                  src={slideSrc}
-                  className="absolute inset-0 w-full h-full object-cover"
-                  autoPlay
-                  muted
-                  playsInline
-                  onEnded={handleHeroVideoEnd}
-                  initial={{ opacity: 0, scale: 1.1 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.1 }}
-                  transition={{ duration: 1.2, ease: "easeOut" }}
-                />
-              ) : (
-                <motion.div
-                  key={slide.id || i}
-                  className="absolute inset-0 w-full h-full"
-                  initial={{ opacity: 0, scale: 1.1 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.1 }}
-                  transition={{ duration: 1.2, ease: "easeOut" }}
-                >
-                  <Image 
-                    src={slideSrc} 
-                    alt={slide.caption} 
-                    fill 
-                    className="object-cover" 
-                    priority
-                    unoptimized 
-                  />
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
+<section className="relative w-full h-[50vh] md:h-[60vh] overflow-hidden">
+  <AnimatePresence mode="wait">
+    {heroSlides.map((slide, i) => {
+      if (i !== heroIndex) return null;
+      const slideSrc = slide.src || slide.url || '';
+      
+      return slide.type === "video" ? (
+        <div key={slide.id || i} className="absolute inset-0">
+          <motion.video
+            key={slide.id || i}
+            src={slideSrc}
+            className="absolute inset-0 w-full h-full object-cover"
+            autoPlay
+            playsInline
+            onEnded={handleHeroVideoEnd}
+            initial={{ opacity: 0, scale: 1.1 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.1 }}
+            transition={{ duration: 1.2, ease: "easeOut" }}
+            // Add event listener for video errors
+            onError={(e) => {
+              console.error("Video error:", e);
+              // Fallback to next slide on error
+              setTimeout(() => {
+                setHeroIndex((i) => (i + 1) % heroSlides.length);
+              }, 1000);
+            }}
+          />
+          
+          {/* Volume control button - Only show for videos */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const video = e.currentTarget.parentElement.querySelector('video');
+              if (video) {
+                video.muted = !video.muted;
+                e.currentTarget.innerHTML = video.muted ? 
+                  '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clipRule="evenodd" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>' :
+                  '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M12 6l-2.829 2.829a2 2 0 01-2.829 0L3 6m9 12l-2.829-2.829a2 2 0 00-2.829 0L3 18" /></svg>';
+              }
+            }}
+            className="absolute bottom-16 right-4 z-30 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+            aria-label="Toggle volume"
+            dangerouslySetInnerHTML={{
+              __html: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" clipRule="evenodd" /></svg>'
+            }}
+          />
+        </div>
+      ) : (
+        <motion.div
+          key={slide.id || i}
+          className="absolute inset-0 w-full h-full"
+          initial={{ opacity: 0, scale: 1.1 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 1.1 }}
+          transition={{ duration: 1.2, ease: "easeOut" }}
+        >
+          <Image 
+            src={slideSrc} 
+            alt={slide.caption} 
+            fill 
+            className="object-cover" 
+            priority
+            unoptimized 
+          />
+        </motion.div>
+      );
+    })}
+  </AnimatePresence>
 
           {/* Gradient overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
@@ -1858,5 +1927,6 @@ export default function DefaultEventPage({ event }) {
         </footer>
       </div>
     </div>
+  </>
   );
 }
