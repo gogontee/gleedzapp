@@ -10,7 +10,7 @@ const inter = Inter({ subsets: ['latin'] });
 // METADATA - Remove themeColor and viewport from here
 export const metadata = {
   title: 'Gleedz - Premium Event Platform',
-  description: 'Gleedz is a premium platform for creating, managing, and voting in competitions, pageants, and events.',
+  description: 'Gleedz is a platform for premium events.',
   keywords: 'events, competitions, pageants, voting, talent shows, contests',
   authors: [{ name: 'Gleedz' }],
   creator: 'Gleedz',
