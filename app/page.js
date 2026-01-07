@@ -249,7 +249,7 @@ export default function HomePage() {
                   <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
                     <Star className="w-3 h-3 text-white" />
                   </div>
-                  <span className="text-xs font-medium text-gray-800">Earn Rewards</span>
+                  <span className="text-xs font-medium text-gray-800">Create Events</span>
                 </div>
               </div>
             </div>
