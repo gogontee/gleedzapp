@@ -88,7 +88,7 @@ export default function BottomNav() {
 
   const handleNavClick = (path, requiresAuth = false) => {
     if (requiresAuth && !user) {
-      alert("Please log in to access this page");
+      alert("Please log in to access your dashboard.");
       router.push('/login');
       return;
     }

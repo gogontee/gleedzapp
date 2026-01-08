@@ -15,6 +15,7 @@ export default function PosterShowcase() {
   const videoRefs = useRef([]);
   const [isHovered, setIsHovered] = useState(false);
   const [volume, setVolume] = useState(0.3); // Default volume at 30%
+  const [isMuted, setIsMuted] = useState(false); // Track mute state
 
   // Fetch posters from gleedz_hero.desktop_posters
   useEffect(() => {
@@ -108,27 +109,41 @@ export default function PosterShowcase() {
     videoRefs.current = videoRefs.current.slice(0, posters.length);
   }, [posters.length]);
 
-  // Handle video play with sound
+  // Handle video play with sound UNMUTED
   const handleVideoPlay = (index) => {
     if (videoRefs.current[index]) {
       try {
-        // Set volume to current volume level
-        videoRefs.current[index].volume = volume;
+        // Set volume to current volume level (30% default)
+        videoRefs.current[index].volume = isMuted ? 0 : volume;
+        
+        // Remove muted attribute to enable sound
+        videoRefs.current[index].muted = false;
         
         // Play video with sound
         const playPromise = videoRefs.current[index].play();
         
         if (playPromise !== undefined) {
           playPromise.then(() => {
-            console.log(`Poster video ${index} playing with sound`);
+            console.log(`Poster video ${index} playing with sound (unmuted)`);
           }).catch(error => {
             console.error(`Error playing poster video ${index}:`, error);
-            // If autoplay fails due to user interaction requirement,
-            // fall back to muted play
-            videoRefs.current[index].muted = true;
-            videoRefs.current[index].play().catch(err => {
-              console.error(`Fallback play also failed for poster video ${index}:`, err);
-            });
+            
+            // If autoplay fails due to browser policies, try with user interaction fallback
+            if (error.name === 'NotAllowedError') {
+              console.log('Autoplay prevented by browser, video will play on next user interaction');
+              
+              // Add a one-time click listener to the entire document
+              const handleUserInteraction = () => {
+                videoRefs.current[index].play().catch(err => {
+                  console.error(`Play after interaction also failed:`, err);
+                });
+                document.removeEventListener('click', handleUserInteraction);
+                document.removeEventListener('touchstart', handleUserInteraction);
+              };
+              
+              document.addEventListener('click', handleUserInteraction);
+              document.addEventListener('touchstart', handleUserInteraction);
+            }
           });
         }
       } catch (error) {
@@ -182,7 +197,7 @@ export default function PosterShowcase() {
       }
     });
     
-    // If current poster is video, play it
+    // If current poster is video, play it with sound
     if (currentPoster && currentPoster.type === "video") {
       // Small delay to ensure DOM is updated
       setTimeout(() => {
@@ -201,18 +216,20 @@ export default function PosterShowcase() {
     }
   };
 
-  // Toggle volume between 30% and 0%
-  const toggleVolume = () => {
-    const currentVideo = videoRefs.current[current];
-    if (currentVideo) {
-      if (currentVideo.volume > 0) {
-        currentVideo.volume = 0;
-        setVolume(0);
-      } else {
-        currentVideo.volume = 0.3; // Restore to 30%
-        setVolume(0.3);
+  // Toggle mute/unmute for videos
+  const toggleMute = () => {
+    const newMuteState = !isMuted;
+    setIsMuted(newMuteState);
+    
+    // Update all video elements
+    videoRefs.current.forEach((video) => {
+      if (video) {
+        video.muted = newMuteState;
+        video.volume = newMuteState ? 0 : volume;
       }
-    }
+    });
+    
+    console.log(newMuteState ? "All videos muted" : "All videos unmuted");
   };
 
   // Get cache-busted URL for videos
@@ -286,10 +303,16 @@ export default function PosterShowcase() {
                 className="w-full h-full object-cover"
                 autoPlay
                 playsInline
+                muted={false} // Explicitly set to false for unmuted playback
                 onEnded={() => handleVideoEnd(current)}
                 onError={(e) => {
                   console.error('Video failed to load:', currentPoster.url, e);
                   handleVideoEnd(current);
+                }}
+                onPlay={(e) => {
+                  // Ensure video is unmuted when it starts playing
+                  e.target.muted = false;
+                  e.target.volume = isMuted ? 0 : volume;
                 }}
               >
                 <source src={getCacheBustedUrl(currentPoster.url)} type="video/mp4" />
@@ -324,15 +347,15 @@ export default function PosterShowcase() {
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            toggleVolume();
+            toggleMute();
           }}
           className="absolute bottom-4 right-4 z-30 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full transition-all duration-200"
-          aria-label={volume > 0 ? "Mute sound" : "Unmute sound"}
+          aria-label={isMuted ? "Unmute sound" : "Mute sound"}
         >
-          {volume > 0 ? (
-            <Volume2 className="w-4 h-4 md:w-5 md:h-5" />
-          ) : (
+          {isMuted ? (
             <VolumeX className="w-4 h-4 md:w-5 md:h-5" />
+          ) : (
+            <Volume2 className="w-4 h-4 md:w-5 md:h-5" />
           )}
         </motion.button>
       )}
