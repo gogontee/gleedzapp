@@ -16,6 +16,7 @@ export default function PosterShowcase() {
   const [isHovered, setIsHovered] = useState(false);
   const [volume, setVolume] = useState(0.3); // Default volume at 30%
   const [isMuted, setIsMuted] = useState(false); // Track mute state
+  const timerRef = useRef(null); // Ref for interval timer
 
   // Fetch posters from gleedz_hero.desktop_posters
   useEffect(() => {
@@ -175,17 +176,28 @@ export default function PosterShowcase() {
     },
   ];
 
-  // Cycle posters every 6s
-  useEffect(() => {
-    if (posters.length <= 1) return; // Don't cycle if only one or no posters
+  // Start interval timer for image transitions
+  const startImageTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    
+    timerRef.current = setInterval(() => {
+      if (posters.length > 1) {
+        setCurrent((prev) => (prev + 1) % posters.length);
+      }
+    }, 10000); // 10 seconds for images
+  };
 
-    const interval = setInterval(() => {
-      setCurrent((prev) => (prev + 1) % posters.length);
-    }, 6000);
-    return () => clearInterval(interval);
-  }, [posters.length]);
+  // Clear interval timer
+  const clearImageTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
 
-  // Handle current video when slide changes
+  // Handle poster changes and manage timers
   useEffect(() => {
     const currentPoster = posters[current];
     
@@ -197,20 +209,34 @@ export default function PosterShowcase() {
       }
     });
     
-    // If current poster is video, play it with sound
+    // If current poster is video, handle video playback
     if (currentPoster && currentPoster.type === "video") {
+      clearImageTimer(); // Clear any image timer
+      
       // Small delay to ensure DOM is updated
       setTimeout(() => {
         if (videoRefs.current[current]) {
           handleVideoPlay(current);
         }
       }, 100);
+    } 
+    // If current poster is image, start 10-second timer
+    else if (currentPoster && currentPoster.type === "image") {
+      clearImageTimer(); // Clear any existing timer
+      startImageTimer(); // Start new timer for images
     }
+    
+    // Cleanup on unmount
+    return () => {
+      clearImageTimer();
+    };
   }, [current, posters]);
 
   // Handle video end to auto-advance
   const handleVideoEnd = (index) => {
     console.log(`Poster video ${index} ended`);
+    clearImageTimer(); // Clear any existing timer
+    
     if (posters.length > 1) {
       setCurrent((prev) => (prev + 1) % posters.length);
     }
@@ -239,6 +265,18 @@ export default function PosterShowcase() {
       return `${url}?t=${Date.now()}`;
     }
     return url;
+  };
+
+  // Handle manual navigation (when user clicks dots)
+  const handleManualNavigation = (index) => {
+    clearImageTimer(); // Clear existing timer
+    setCurrent(index);
+    
+    // Restart timer if navigating to an image
+    const newPoster = posters[index];
+    if (newPoster && newPoster.type === "image") {
+      startImageTimer();
+    }
   };
 
   // Add debug logging for rendering
@@ -307,12 +345,18 @@ export default function PosterShowcase() {
                 onEnded={() => handleVideoEnd(current)}
                 onError={(e) => {
                   console.error('Video failed to load:', currentPoster.url, e);
-                  handleVideoEnd(current);
+                  // If video errors, advance to next after a delay
+                  setTimeout(() => {
+                    if (posters.length > 1) {
+                      handleManualNavigation((current + 1) % posters.length);
+                    }
+                  }, 1000);
                 }}
                 onPlay={(e) => {
                   // Ensure video is unmuted when it starts playing
                   e.target.muted = false;
                   e.target.volume = isMuted ? 0 : volume;
+                  clearImageTimer(); // Make sure image timer is cleared
                 }}
               >
                 <source src={getCacheBustedUrl(currentPoster.url)} type="video/mp4" />
@@ -330,6 +374,12 @@ export default function PosterShowcase() {
                   unoptimized
                   onError={(e) => {
                     console.error('Image failed to load:', currentPoster.url);
+                    // If image errors, advance to next after a delay
+                    setTimeout(() => {
+                      if (posters.length > 1) {
+                        handleManualNavigation((current + 1) % posters.length);
+                      }
+                    }, 1000);
                   }}
                 />
               </div>
@@ -374,7 +424,7 @@ export default function PosterShowcase() {
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                setCurrent(index);
+                handleManualNavigation(index);
               }}
               className={`w-2 h-2 rounded-full transition-all ${
                 index === current
