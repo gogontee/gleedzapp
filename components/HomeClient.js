@@ -55,9 +55,9 @@ const eventTabs = [
 
 // Social media links
 const socialMedia = [
-  { icon: Instagram, href: "https://instagram.com/gleedz", label: "Instagram" },
-  { icon: Facebook, href: "https://facebook.com/gleedz", label: "Facebook" },
-  { icon: Twitter, href: "https://twitter.com/gleedz", label: "X (Twitter)" },
+  { icon: Instagram, href: "https://instagram.com/gleedzevents", label: "Instagram" },
+  { icon: Facebook, href: "https://facebook.com/gleedzevents", label: "Facebook" },
+  { icon: Twitter, href: "https://x.com/gleedzevents", label: "X (Twitter)" },
 ];
 
 // Features data
