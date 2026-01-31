@@ -741,7 +741,7 @@ export default function CandidatesForm({ eventId, colors }) {
     }
 
     if (hasApplied) {
-      alert("You have already submitted an application for this event.");
+      alert("Application Submitted for this event.");
       return;
     }
 
