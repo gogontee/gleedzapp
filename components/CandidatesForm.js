@@ -1,4 +1,3 @@
-// components/CandidatesForm.jsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -30,7 +29,12 @@ import {
   Check,
   LogIn,
   UserPlus,
-  Lock
+  Lock,
+  Image,
+  Info,
+  CheckCircle,
+  Camera,
+  AlertTriangle
 } from "lucide-react";
 import Link from "next/link";
 
@@ -83,7 +87,17 @@ export default function CandidatesForm({ eventId, colors }) {
     tiktok: "",
     gallery: []
   });
-  const [uploading, setUploading] = useState(false);
+  
+  // New state for tracking upload progress
+  const [uploadingFiles, setUploadingFiles] = useState({
+    photo: false,
+    banner: false,
+    gallery: false
+  });
+  
+  // Track which files are currently being uploaded
+  const [activeUploads, setActiveUploads] = useState([]);
+  
   const [showStatesDropdown, setShowStatesDropdown] = useState(false);
   const [lgas, setLgas] = useState([]);
   const [showLgaDropdown, setShowLgaDropdown] = useState(false);
@@ -91,6 +105,52 @@ export default function CandidatesForm({ eventId, colors }) {
   const [nigeriaData, setNigeriaData] = useState([]);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
+  
+  // New validation state for image requirements
+  const [imageRequirements, setImageRequirements] = useState({
+    photoUploaded: false,
+    bannerUploaded: false,
+    bannerRatioValid: null,
+    aboutWordCount: 0,
+    aboutValid: false
+  });
+
+  // Calculate if form can be submitted
+  const canSubmit = () => {
+    const hasRequiredFields = 
+      candidateData.full_name.trim() &&
+      candidateData.email.trim() &&
+      candidateData.whatsapp_number.trim() &&
+      candidateData.age.trim() &&
+      candidateData.occupation.trim() &&
+      candidateData.married &&
+      candidateData.location &&
+      candidateData.local_government &&
+      acceptedTerms &&
+      !uploadingFiles.photo &&
+      !uploadingFiles.banner &&
+      !uploadingFiles.gallery &&
+      activeUploads.length === 0;
+    
+    // Check about section word count
+    const words = candidateData.about.trim().split(/\s+/).filter(word => word.length > 0);
+    const aboutValid = words.length >= 20 && words.length <= 100;
+    
+    return hasRequiredFields && aboutValid && !hasApplied && !saving;
+  };
+
+  // Check about section word count
+  useEffect(() => {
+    const words = candidateData.about.trim().split(/\s+/).filter(word => word.length > 0);
+    const wordCount = words.length;
+    const isValid = wordCount >= 20 && wordCount <= 100;
+    
+    setImageRequirements(prev => ({
+      ...prev,
+      aboutWordCount: wordCount,
+      aboutValid: isValid
+    }));
+  }, [candidateData.about]);
 
   useEffect(() => {
     checkOwnership();
@@ -142,11 +202,10 @@ export default function CandidatesForm({ eventId, colors }) {
   const handleFileUpload = (field, e) => {
     if (!handleFieldInteraction(field)) return;
     
-    // For photo upload, use the actual handler
     if (field === 'photo') {
-      handlePhotoUpload('photo', e);
+      handlePhotoUpload(e);
     } else if (field === 'banner') {
-      handlePhotoUpload('banner', e);
+      handleBannerUpload(e);
     } else if (field === 'gallery') {
       handleGalleryUpload(e);
     }
@@ -374,9 +433,15 @@ export default function CandidatesForm({ eventId, colors }) {
       errors.local_government = "LGA is required";
     }
     
-    // Instagram encouragement (not required, but encouraged)
-    if (!candidateData.instagram.trim()) {
-      // This is just for encouragement, not an error
+    // About section validation (20-100 words)
+    const words = candidateData.about.trim().split(/\s+/).filter(word => word.length > 0);
+    if (words.length < 20 || words.length > 100) {
+      errors.about = `About section must be between 20-100 words (currently ${words.length})`;
+    }
+    
+    // Check if profile photo is uploaded
+    if (!candidateData.photo.trim()) {
+      errors.photo = "Profile photo is required";
     }
     
     if (!acceptedTerms) {
@@ -429,6 +494,9 @@ export default function CandidatesForm({ eventId, colors }) {
   };
 
   const uploadFile = async (file, path) => {
+    const uploadId = Date.now().toString();
+    setActiveUploads(prev => [...prev, uploadId]);
+    
     try {
       const { data, error } = await supabase.storage
         .from("candidates")
@@ -444,14 +512,16 @@ export default function CandidatesForm({ eventId, colors }) {
     } catch (error) {
       console.error("Error uploading file:", error);
       throw error;
+    } finally {
+      setActiveUploads(prev => prev.filter(id => id !== uploadId));
     }
   };
 
-  const handleBannerUpload = async (event) => {
+  const handleFormBannerUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    setUploading(true);
+    setUploadingFiles(prev => ({ ...prev, banner: true }));
     try {
       const path = `form-banners/${eventId}/${Date.now()}-${file.name}`;
       const url = await uploadFile(file, path);
@@ -459,32 +529,93 @@ export default function CandidatesForm({ eventId, colors }) {
     } catch (error) {
       alert("Error uploading banner");
     } finally {
-      setUploading(false);
+      setUploadingFiles(prev => ({ ...prev, banner: false }));
     }
   };
 
-  const handlePhotoUpload = async (field, event) => {
+  // Check image ratio for banner
+  const checkImageRatio = (file) => {
+    return new Promise((resolve) => {
+      const img = new window.Image();
+      img.onload = function() {
+        const ratio = this.width / this.height;
+        // Check for 2.5:1 ratio (1000:400 = 2.5)
+        const isRecommended = Math.abs(ratio - 2.5) < 0.1;
+        resolve({ width: this.width, height: this.height, ratio, isRecommended });
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handlePhotoUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
     if (!user) {
       setLoginPromptEvent({
-        field: field,
-        message: `To upload your ${field}, you need to be logged in.`
+        field: "photo",
+        message: "To upload your profile photo, you need to be logged in."
       });
       setShowLoginModal(true);
       return;
     }
 
-    setUploading(true);
+    setUploadingFiles(prev => ({ ...prev, photo: true }));
     try {
-      const path = `candidate-${field}/${eventId}/${user.id}/${Date.now()}-${file.name}`;
+      const path = `candidate-photo/${eventId}/${user.id}/${Date.now()}-${file.name}`;
       const url = await uploadFile(file, path);
-      setCandidateData(prev => ({ ...prev, [field]: url }));
+      setCandidateData(prev => ({ ...prev, photo: url }));
+      
+      setImageRequirements(prev => ({ ...prev, photoUploaded: true }));
     } catch (error) {
-      alert(`Error uploading ${field}`);
+      alert(`Error uploading photo`);
     } finally {
-      setUploading(false);
+      setUploadingFiles(prev => ({ ...prev, photo: false }));
+    }
+  };
+
+  const handleBannerUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!user) {
+      setLoginPromptEvent({
+        field: "banner",
+        message: "To upload your banner, you need to be logged in."
+      });
+      setShowLoginModal(true);
+      return;
+    }
+
+    // Check image ratio before uploading
+    const ratioInfo = await checkImageRatio(file);
+    
+    if (!ratioInfo.isRecommended) {
+      const userConfirmed = window.confirm(
+        `Your banner image ratio is ${ratioInfo.width}:${ratioInfo.height} (approximately ${ratioInfo.ratio.toFixed(2)}:1).\n` +
+        `For best display, we recommend 1000×400 pixels (2.5:1 ratio).\n` +
+        `Do you want to proceed with this image?`
+      );
+      
+      if (!userConfirmed) {
+        return;
+      }
+    }
+
+    setUploadingFiles(prev => ({ ...prev, banner: true }));
+    try {
+      const path = `candidate-banner/${eventId}/${user.id}/${Date.now()}-${file.name}`;
+      const url = await uploadFile(file, path);
+      setCandidateData(prev => ({ ...prev, banner: url }));
+      setImageRequirements(prev => ({ 
+        ...prev, 
+        bannerUploaded: true,
+        bannerRatioValid: ratioInfo.isRecommended 
+      }));
+    } catch (error) {
+      alert("Error uploading banner");
+    } finally {
+      setUploadingFiles(prev => ({ ...prev, banner: false }));
     }
   };
 
@@ -505,7 +636,7 @@ export default function CandidatesForm({ eventId, colors }) {
       return;
     }
 
-    setUploading(true);
+    setUploadingFiles(prev => ({ ...prev, gallery: true }));
     try {
       const newGalleryItems = await Promise.all(
         files.map(async (file) => {
@@ -522,7 +653,7 @@ export default function CandidatesForm({ eventId, colors }) {
     } catch (error) {
       alert("Error uploading gallery photos");
     } finally {
-      setUploading(false);
+      setUploadingFiles(prev => ({ ...prev, gallery: false }));
     }
   };
 
@@ -614,6 +745,12 @@ export default function CandidatesForm({ eventId, colors }) {
       return;
     }
 
+    // Check if any uploads are still in progress
+    if (uploadingFiles.photo || uploadingFiles.banner || uploadingFiles.gallery || activeUploads.length > 0) {
+      alert("Please wait for all uploads to complete before submitting.");
+      return;
+    }
+
     // If form is paid, show payment confirmation modal
     if (formData.is_paid && formData.token_price > 0) {
       setShowPaymentModal(true);
@@ -683,6 +820,13 @@ export default function CandidatesForm({ eventId, colors }) {
       setAcceptedTerms(false);
       setShowPaymentModal(false);
       setValidationErrors({});
+      setImageRequirements({
+        photoUploaded: false,
+        bannerUploaded: false,
+        bannerRatioValid: null,
+        aboutWordCount: 0,
+        aboutValid: false
+      });
     } catch (error) {
       console.error("Error submitting candidate form:", error);
       alert("Error submitting application");
@@ -891,8 +1035,8 @@ export default function CandidatesForm({ eventId, colors }) {
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={handleBannerUpload}
-                    disabled={uploading}
+                    onChange={handleFormBannerUpload}
+                    disabled={uploadingFiles.banner}
                   />
                 </label>
               </div>
@@ -1034,6 +1178,34 @@ export default function CandidatesForm({ eventId, colors }) {
               </span>
             </div>
           )}
+        </div>
+
+        {/* Image Requirements Info Box */}
+        <div className="mb-6 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+          <div className="flex items-start space-x-2">
+            <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <h4 className="text-xs font-semibold text-blue-900 mb-1">Image Requirements</h4>
+              <ul className="text-xs text-blue-700 space-y-0.5">
+                <li className="flex items-center">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  <span><strong>Profile Photo:</strong> Enticing half-shot showing your face clearly</span>
+                </li>
+                <li className="flex items-center">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  <span><strong>Banner Image:</strong> Preferably 1000×400 pixels (10:4 ratio) for optimal display</span>
+                </li>
+                <li className="flex items-center">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  <span><strong>Gallery Images:</strong> Professional quality photos that will be made public on your candidate profile</span>
+                </li>
+                <li className="flex items-center">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  <span><strong>About Section:</strong> Must be between 20-100 words</span>
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -1434,9 +1606,19 @@ export default function CandidatesForm({ eventId, colors }) {
 
           {/* About You */}
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: colors.text }}>
-              About You
-            </label>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="block text-xs font-medium" style={{ color: colors.text }}>
+                About You *
+              </label>
+              <div className={`text-xs ${imageRequirements.aboutValid ? 'text-green-600' : 'text-amber-600'}`}>
+                {imageRequirements.aboutWordCount} words
+                {!imageRequirements.aboutValid && imageRequirements.aboutWordCount > 0 && (
+                  <span className="ml-1">
+                    ({imageRequirements.aboutWordCount < 20 ? 'Need at least 20' : 'Maximum 100 words'})
+                  </span>
+                )}
+              </div>
+            </div>
             <textarea
               value={candidateData.about}
               onChange={(e) => handleInputChange('about', e.target.value)}
@@ -1446,73 +1628,162 @@ export default function CandidatesForm({ eventId, colors }) {
                 borderColor: colors.border,
                 focusBorderColor: colors.primary 
               }}
-              placeholder="Tell us about yourself, your background, and why you're interested..."
+              placeholder="Tell us about yourself, your background, and why you're interested. This will be visible to voters (20-100 words required)."
               onClick={() => !user && setShowLoginModal(true)}
             />
+            <div className="flex items-center text-xs text-gray-500 mt-1">
+              <AlertCircle className="w-2.5 h-2.5 mr-0.5" />
+              This description will be visible to voters on your public profile
+            </div>
+            {validationErrors.about && (
+              <p className="text-red-500 text-xs mt-1 flex items-center">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                {validationErrors.about}
+              </p>
+            )}
           </div>
 
           {/* Profile Photo */}
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: colors.text }}>
-              Profile Photo
-            </label>
-            <div className="flex items-center space-x-3">
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="block text-xs font-medium" style={{ color: colors.text }}>
+                Profile Photo *
+              </label>
               {candidateData.photo && (
-                <img 
-                  src={candidateData.photo} 
-                  alt="Profile" 
-                  className="w-12 h-12 rounded-full object-cover"
-                />
+                <div className="text-xs text-green-600 flex items-center">
+                  <CheckCircle className="w-3 h-3 mr-0.5" />
+                  Uploaded
+                </div>
+              )}
+            </div>
+            <div className="flex items-center space-x-3">
+              {candidateData.photo ? (
+                <div className="relative">
+                  <img 
+                    src={candidateData.photo} 
+                    alt="Profile" 
+                    className="w-12 h-12 rounded-full object-cover"
+                  />
+                  {uploadingFiles.photo && (
+                    <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                      <Loader className="w-4 h-4 text-white animate-spin" />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                  <Camera className="w-5 h-5 text-gray-400" />
+                </div>
               )}
               <label className="flex items-center space-x-1.5 px-3 py-1.5 border rounded cursor-pointer hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
-                <Upload className="w-3.5 h-3.5" />
-                <span>{candidateData.photo ? 'Change Photo' : 'Upload Photo'}</span>
+                {uploadingFiles.photo ? (
+                  <Loader className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Upload className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {uploadingFiles.photo ? 'Uploading...' : candidateData.photo ? 'Change Photo' : 'Upload Photo'}
+                </span>
                 <input
                   type="file"
                   accept="image/*"
                   className="hidden"
                   onChange={(e) => handleFileUpload('photo', e)}
-                  disabled={uploading}
+                  disabled={uploadingFiles.photo}
                 />
               </label>
             </div>
+            <p className="text-xs text-gray-500 mt-1 flex items-center">
+              <AlertCircle className="w-2.5 h-2.5 mr-0.5" />
+              Enticing half-shot photo showing your face clearly (required)
+            </p>
             {!user && (
               <p className="text-xs text-orange-600 mt-1">Please sign in to upload photos</p>
+            )}
+            {validationErrors.photo && (
+              <p className="text-red-500 text-xs mt-1 flex items-center">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                {validationErrors.photo}
+              </p>
             )}
           </div>
 
           {/* Banner Photo */}
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: colors.text }}>
-              Banner Photo
-            </label>
-            <div className="space-y-1.5">
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="block text-xs font-medium" style={{ color: colors.text }}>
+                Banner Photo
+              </label>
               {candidateData.banner && (
-                <img 
-                  src={candidateData.banner} 
-                  alt="Banner" 
-                  className="w-full h-24 rounded-lg object-cover"
-                />
+                <div className="flex items-center space-x-1">
+                  {imageRequirements.bannerRatioValid === false && (
+                    <AlertTriangle className="w-3 h-3 text-amber-500" />
+                  )}
+                  <div className={`text-xs ${imageRequirements.bannerRatioValid ? 'text-green-600' : 'text-amber-600'}`}>
+                    <CheckCircle className="w-3 h-3 inline mr-0.5" />
+                    Uploaded
+                    {imageRequirements.bannerRatioValid === false && (
+                      <span className="ml-1">(Non-standard ratio)</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              {candidateData.banner ? (
+                <div className="relative">
+                  <img 
+                    src={candidateData.banner} 
+                    alt="Banner" 
+                    className="w-full h-24 rounded-lg object-cover"
+                  />
+                  {uploadingFiles.banner && (
+                    <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                      <Loader className="w-4 h-4 text-white animate-spin" />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="w-full h-24 rounded-lg bg-gray-200 flex items-center justify-center">
+                  <Image className="w-6 h-6 text-gray-400" />
+                </div>
               )}
               <label className="flex items-center space-x-1.5 px-3 py-1.5 border rounded cursor-pointer hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
-                <Upload className="w-3.5 h-3.5" />
-                <span>{candidateData.banner ? 'Change Banner' : 'Upload Banner'}</span>
+                {uploadingFiles.banner ? (
+                  <Loader className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Upload className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {uploadingFiles.banner ? 'Uploading...' : candidateData.banner ? 'Change Banner' : 'Upload Banner'}
+                </span>
                 <input
                   type="file"
                   accept="image/*"
                   className="hidden"
                   onChange={(e) => handleFileUpload('banner', e)}
-                  disabled={uploading}
+                  disabled={uploadingFiles.banner}
                 />
               </label>
             </div>
+            <p className="text-xs text-gray-500 mt-1 flex items-center">
+              <AlertCircle className="w-2.5 h-2.5 mr-0.5" />
+              Recommended: 1000×400 pixels (10:4 ratio) for optimal display
+            </p>
           </div>
 
           {/* Gallery */}
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: colors.text }}>
-              Gallery Photos (Max 6)
-            </label>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="block text-xs font-medium" style={{ color: colors.text }}>
+                Gallery Photos (Max 6)
+              </label>
+              {candidateData.gallery.length > 0 && (
+                <div className="text-xs text-gray-600">
+                  {candidateData.gallery.length} / 6 uploaded
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
               {candidateData.gallery.map((item, index) => (
                 <div key={index} className="relative group">
@@ -1543,20 +1814,31 @@ export default function CandidatesForm({ eventId, colors }) {
               ))}
               
               {candidateData.gallery.length < 6 && (
-                <label className="border-2 border-dashed rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 h-20 disabled:opacity-50 disabled:cursor-not-allowed">
+                <label className="border-2 border-dashed rounded flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 h-20 disabled:opacity-50 disabled:cursor-not-allowed relative">
+                  {uploadingFiles.gallery && (
+                    <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center">
+                      <Loader className="w-4 h-4 text-white animate-spin" />
+                    </div>
+                  )}
                   <Plus className="w-5 h-5 text-gray-400 mb-0.5" />
-                  <span className="text-xs text-gray-500">Add Photo</span>
+                  <span className="text-xs text-gray-500">
+                    {uploadingFiles.gallery ? 'Uploading...' : 'Add Photo'}
+                  </span>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
                     className="hidden"
                     onChange={(e) => handleFileUpload('gallery', e)}
-                    disabled={!user}
+                    disabled={uploadingFiles.gallery || !user}
                   />
                 </label>
               )}
             </div>
+            <p className="text-xs text-gray-500 mt-1 flex items-center">
+              <AlertCircle className="w-2.5 h-2.5 mr-0.5" />
+              Professional quality photos that will be made public on your candidate profile
+            </p>
             {!user && (
               <p className="text-xs text-orange-600">Please sign in to add gallery photos</p>
             )}
@@ -1571,6 +1853,7 @@ export default function CandidatesForm({ eventId, colors }) {
                 checked={acceptedTerms}
                 onChange={handleTermsCheckbox}
                 className="mt-0.5 rounded"
+                disabled={!user}
               />
               <div>
                 <label htmlFor="terms" className="text-xs font-medium" style={{ color: colors.text }}>
@@ -1586,7 +1869,7 @@ export default function CandidatesForm({ eventId, colors }) {
                   >
                     Terms of Use
                   </Link>
-                  {" "}and confirm that all information provided is accurate and truthful.
+                  {" "}and confirm that all information provided is accurate and truthful. You also acknowledge that your gallery images will be made public.
                 </p>
                 {validationErrors.terms && (
                   <p className="text-red-500 text-xs mt-1 flex items-center">
@@ -1602,13 +1885,18 @@ export default function CandidatesForm({ eventId, colors }) {
           <div className="pt-4">
             <button
               onClick={submitCandidateForm}
-              disabled={saving || !candidateData.full_name || hasApplied || !acceptedTerms}
-              className="w-full py-2 px-3 rounded font-medium text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-sm text-sm"
+              disabled={!canSubmit()}
+              className="w-full py-2 px-3 rounded font-medium text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-sm text-sm relative"
               style={{
                 backgroundColor: colors.primary,
               }}
             >
-              {saving ? (
+              {uploadingFiles.photo || uploadingFiles.banner || uploadingFiles.gallery || activeUploads.length > 0 ? (
+                <div className="flex items-center justify-center space-x-1.5">
+                  <Loader className="w-4 h-4 animate-spin" />
+                  <span>Uploading Images...</span>
+                </div>
+              ) : saving ? (
                 <div className="flex items-center justify-center space-x-1.5">
                   <Loader className="w-4 h-4 animate-spin" />
                   <span>Submitting...</span>
@@ -1625,7 +1913,39 @@ export default function CandidatesForm({ eventId, colors }) {
               ) : (
                 'Submit Application'
               )}
+              
+              {/* Upload Progress Indicator */}
+              {(uploadingFiles.photo || uploadingFiles.banner || uploadingFiles.gallery) && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/30 overflow-hidden">
+                  <div 
+                    className="h-full bg-white/50 animate-pulse"
+                    style={{ animationDuration: '1.5s' }}
+                  />
+                </div>
+              )}
             </button>
+            
+            {/* Status Indicators */}
+            <div className="mt-2 text-xs text-gray-500">
+              {!canSubmit() && user && !hasApplied && (
+                <div className="flex items-center">
+                  <AlertCircle className="w-3 h-3 mr-1" />
+                  <span>
+                    {uploadingFiles.photo || uploadingFiles.banner || uploadingFiles.gallery 
+                      ? "Please wait for all image uploads to complete" 
+                      : !candidateData.photo 
+                        ? "Profile photo is required" 
+                        : imageRequirements.aboutWordCount === 0 
+                          ? "About section is required (20-100 words)" 
+                          : !imageRequirements.aboutValid 
+                            ? `About section must be 20-100 words (currently ${imageRequirements.aboutWordCount})` 
+                            : !acceptedTerms 
+                              ? "Please accept the terms of use" 
+                              : "Please fill in all required fields"}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
