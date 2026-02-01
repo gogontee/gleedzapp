@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useUser } from "@supabase/auth-helpers-react";
 import { 
@@ -50,6 +50,103 @@ const NIGERIAN_STATES = [
 // Marital status options
 const MARITAL_STATUS = ["Single", "Married", "Divorced", "Widowed"];
 
+// Image optimization configurations
+const IMAGE_CONFIG = {
+  PROFILE: {
+    maxWidth: 500,
+    maxHeight: 500,
+    maxSizeMB: 0.5, // 500KB
+    quality: 0.8
+  },
+  BANNER: {
+    maxWidth: 1200,
+    maxHeight: 480,
+    maxSizeMB: 1, // 1MB
+    quality: 0.7
+  },
+  GALLERY: {
+    maxWidth: 800,
+    maxHeight: 600,
+    maxSizeMB: 0.8, // 800KB
+    quality: 0.75
+  },
+  THUMBNAIL: {
+    maxWidth: 200,
+    maxHeight: 200,
+    maxSizeMB: 0.1, // 100KB
+    quality: 0.6
+  }
+};
+
+// Client-side compression function using dynamic import
+const compressImageClientSide = async (file, config) => {
+  try {
+    // Dynamically import browser-image-compression only on the client
+    const imageCompression = (await import('browser-image-compression')).default;
+    
+    const options = {
+      maxSizeMB: config.maxSizeMB,
+      maxWidthOrHeight: Math.max(config.maxWidth, config.maxHeight),
+      useWebWorker: true,
+      fileType: 'image/jpeg',
+      initialQuality: config.quality,
+      alwaysKeepResolution: true,
+    };
+
+    const compressedFile = await imageCompression(file, options);
+    
+    // If file is still too large, compress further
+    if (compressedFile.size > config.maxSizeMB * 1024 * 1024) {
+      const furtherOptions = {
+        ...options,
+        maxSizeMB: config.maxSizeMB * 0.8,
+        initialQuality: config.quality * 0.8,
+      };
+      return await imageCompression(file, furtherOptions);
+    }
+    
+    return compressedFile;
+  } catch (error) {
+    console.error('Image compression error:', error);
+    // Return original file if compression fails
+    return file;
+  }
+};
+
+// Client-side thumbnail creation using dynamic import
+const createThumbnailClientSide = async (file) => {
+  try {
+    // Dynamically import browser-image-compression only on the client
+    const imageCompression = (await import('browser-image-compression')).default;
+    
+    const options = {
+      maxSizeMB: IMAGE_CONFIG.THUMBNAIL.maxSizeMB,
+      maxWidthOrHeight: IMAGE_CONFIG.THUMBNAIL.maxWidth,
+      useWebWorker: true,
+      fileType: 'image/jpeg',
+      initialQuality: IMAGE_CONFIG.THUMBNAIL.quality,
+    };
+    
+    return await imageCompression(file, options);
+  } catch (error) {
+    console.error('Thumbnail creation error:', error);
+    return file;
+  }
+};
+
+// Helper function to get image dimensions
+const getImageDimensions = (file) => {
+  return new Promise((resolve) => {
+    // This function runs on client side only
+    const img = new window.Image();
+    img.onload = function() {
+      resolve({ width: this.width, height: this.height });
+    };
+    img.onerror = () => resolve({ width: 0, height: 0 });
+    img.src = URL.createObjectURL(file);
+  });
+};
+
 export default function CandidatesForm({ eventId, colors }) {
   const user = useUser();
   const [isEditing, setIsEditing] = useState(false);
@@ -57,6 +154,7 @@ export default function CandidatesForm({ eventId, colors }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [event, setEvent] = useState(null);
+  const [eventOwnerId, setEventOwnerId] = useState(null);
   const [hasApplied, setHasApplied] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -75,8 +173,8 @@ export default function CandidatesForm({ eventId, colors }) {
     about: "",
     photo: "",
     banner: "",
-    location: "", // Will store State of Origin
-    local_government: "", // New field for LGA
+    location: "",
+    local_government: "",
     email: "",
     whatsapp_number: "",
     age: "",
@@ -88,11 +186,32 @@ export default function CandidatesForm({ eventId, colors }) {
     gallery: []
   });
   
-  // New state for tracking upload progress
+  // Upload states
   const [uploadingFiles, setUploadingFiles] = useState({
     photo: false,
     banner: false,
     gallery: false
+  });
+  
+  // New state for thumbnail URLs
+  const [thumbnails, setThumbnails] = useState({
+    photo: "",
+    banner: "",
+    gallery: []
+  });
+  
+  // Track loaded images
+  const [loadedImages, setLoadedImages] = useState({
+    photo: false,
+    banner: false,
+    gallery: []
+  });
+  
+  // Image loading states
+  const [imageLoading, setImageLoading] = useState({
+    photo: false,
+    banner: false,
+    gallery: []
   });
   
   // Track which files are currently being uploaded
@@ -106,7 +225,7 @@ export default function CandidatesForm({ eventId, colors }) {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   
-  // New validation state for image requirements
+  // Image requirements state
   const [imageRequirements, setImageRequirements] = useState({
     photoUploaded: false,
     bannerUploaded: false,
@@ -132,7 +251,6 @@ export default function CandidatesForm({ eventId, colors }) {
       !uploadingFiles.gallery &&
       activeUploads.length === 0;
     
-    // Check about section word count
     const words = candidateData.about.trim().split(/\s+/).filter(word => word.length > 0);
     const aboutValid = words.length >= 20 && words.length <= 100;
     
@@ -152,6 +270,7 @@ export default function CandidatesForm({ eventId, colors }) {
     }));
   }, [candidateData.about]);
 
+  // Load initial data
   useEffect(() => {
     checkOwnership();
     loadFormConfig();
@@ -160,58 +279,7 @@ export default function CandidatesForm({ eventId, colors }) {
     loadNigeriaData();
   }, [eventId, user]);
 
-  // Handle form field interactions for non-auth users
-  const handleFieldInteraction = (fieldName) => {
-    if (!user) {
-      setLoginPromptEvent({
-        field: fieldName,
-        message: `To fill in your ${fieldName}, you need to be logged in.`
-      });
-      setShowLoginModal(true);
-      return false;
-    }
-    return true;
-  };
-
-  // Modified handlers for form fields
-  const handleInputChange = (field, value) => {
-    if (!handleFieldInteraction(field)) return;
-    setCandidateData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleStateDropdownClick = () => {
-    if (!handleFieldInteraction("state of origin")) return;
-    setShowStatesDropdown(!showStatesDropdown);
-  };
-
-  const handleMaritalDropdownClick = () => {
-    if (!handleFieldInteraction("marital status")) return;
-    setShowMaritalDropdown(!showMaritalDropdown);
-  };
-
-  const handleLgaDropdownClick = () => {
-    if (!handleFieldInteraction("local government area")) return;
-    setShowLgaDropdown(!showLgaDropdown);
-  };
-
-  const handleTermsCheckbox = () => {
-    if (!handleFieldInteraction("terms of use")) return;
-    setAcceptedTerms(!acceptedTerms);
-  };
-
-  const handleFileUpload = (field, e) => {
-    if (!handleFieldInteraction(field)) return;
-    
-    if (field === 'photo') {
-      handlePhotoUpload(e);
-    } else if (field === 'banner') {
-      handleBannerUpload(e);
-    } else if (field === 'gallery') {
-      handleGalleryUpload(e);
-    }
-  };
-
-  // Load Nigeria data from Supabase - load ALL records
+  // Load Nigeria data from Supabase
   const loadNigeriaData = async () => {
     try {
       const { data, error } = await supabase
@@ -225,7 +293,6 @@ export default function CandidatesForm({ eventId, colors }) {
 
       if (data) {
         setNigeriaData(data);
-        console.log("Nigeria data loaded:", data.length, "records");
       }
     } catch (error) {
       console.error("Error loading Nigeria data:", error);
@@ -240,14 +307,21 @@ export default function CandidatesForm({ eventId, colors }) {
     }
 
     try {
-      const { data: event, error } = await supabase
+      const { data: eventData, error } = await supabase
         .from("events")
-        .select("user_id")
+        .select("user_id, name")
         .eq("id", eventId)
         .single();
 
       if (error) throw error;
-      setIsOwner(event?.user_id === user.id);
+      setIsOwner(eventData?.user_id === user.id);
+      setEventOwnerId(eventData?.user_id);
+      
+      // Set event data for later use
+      setEvent({
+        name: eventData?.name,
+        user_id: eventData?.user_id
+      });
     } catch (error) {
       console.error("Error checking ownership:", error);
       setIsOwner(false);
@@ -260,12 +334,13 @@ export default function CandidatesForm({ eventId, colors }) {
     try {
       const { data: eventData, error } = await supabase
         .from("events")
-        .select("name, title")
+        .select("name, user_id")
         .eq("id", eventId)
         .single();
 
       if (eventData && !error) {
         setEvent(eventData);
+        setEventOwnerId(eventData.user_id);
       }
     } catch (error) {
       console.error("Error loading event:", error);
@@ -307,7 +382,62 @@ export default function CandidatesForm({ eventId, colors }) {
     }
   };
 
-  // Handle state selection
+  // Handle form field interactions
+  const handleFieldInteraction = (fieldName) => {
+    if (!user) {
+      setLoginPromptEvent({
+        field: fieldName,
+        message: `To fill in your ${fieldName}, you need to be logged in.`
+      });
+      setShowLoginModal(true);
+      return false;
+    }
+    return true;
+  };
+
+  // Modified handlers for form fields
+  const handleInputChange = (field, value) => {
+    if (!handleFieldInteraction(field)) return;
+    setCandidateData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Handle image load events
+  const handleImageLoad = (type, index = null) => {
+    if (type === 'photo') {
+      setLoadedImages(prev => ({ ...prev, photo: true }));
+      setImageLoading(prev => ({ ...prev, photo: false }));
+    } else if (type === 'banner') {
+      setLoadedImages(prev => ({ ...prev, banner: true }));
+      setImageLoading(prev => ({ ...prev, banner: false }));
+    } else if (type === 'gallery' && index !== null) {
+      setLoadedImages(prev => ({
+        ...prev,
+        gallery: prev.gallery.map((item, i) => i === index ? true : item)
+      }));
+      setImageLoading(prev => ({
+        ...prev,
+        gallery: prev.gallery.map((item, i) => i === index ? false : item)
+      }));
+    }
+  };
+
+  // Handle image error
+  const handleImageError = (type, index = null) => {
+    if (type === 'photo') {
+      setLoadedImages(prev => ({ ...prev, photo: false }));
+      setImageLoading(prev => ({ ...prev, photo: false }));
+    } else if (type === 'banner') {
+      setLoadedImages(prev => ({ ...prev, banner: false }));
+      setImageLoading(prev => ({ ...prev, banner: false }));
+    } else if (type === 'gallery' && index !== null) {
+      setImageLoading(prev => ({
+        ...prev,
+        gallery: prev.gallery.map((item, i) => i === index ? false : item)
+      }));
+    }
+  };
+
+  // State selection handler
   const handleStateSelect = async (state) => {
     if (!handleFieldInteraction("state of origin")) return;
     
@@ -326,11 +456,9 @@ export default function CandidatesForm({ eventId, colors }) {
       );
       
       if (stateRecord && stateRecord.lga && Array.isArray(stateRecord.lga)) {
-        console.log(`Found LGAs for ${state}:`, stateRecord.lga);
         setLgas(stateRecord.lga);
       } else {
         // If not found in loaded data, query the database directly
-        console.log(`State ${state} not found in loaded data, querying database...`);
         await queryStateFromDatabase(state);
       }
     } else {
@@ -355,10 +483,8 @@ export default function CandidatesForm({ eventId, colors }) {
       }
 
       if (data && data.lga && Array.isArray(data.lga)) {
-        console.log(`Database query found LGAs for ${state}:`, data.lga);
         setLgas(data.lga);
       } else {
-        console.log(`No LGA data found for state: ${state}`);
         setLgas([]);
       }
     } catch (error) {
@@ -379,6 +505,388 @@ export default function CandidatesForm({ eventId, colors }) {
     if (!handleFieldInteraction("marital status")) return;
     setCandidateData(prev => ({ ...prev, married: status }));
     setShowMaritalDropdown(false);
+  };
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showStatesDropdown && !event.target.closest('.state-dropdown-container')) {
+        setShowStatesDropdown(false);
+      }
+      if (showLgaDropdown && !event.target.closest('.lga-dropdown-container')) {
+        setShowLgaDropdown(false);
+      }
+      if (showMaritalDropdown && !event.target.closest('.marital-dropdown-container')) {
+        setShowMaritalDropdown(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [showStatesDropdown, showLgaDropdown, showMaritalDropdown]);
+
+  // Handle dropdown clicks
+  const handleStateDropdownClick = () => {
+    if (!handleFieldInteraction("state of origin")) return;
+    setShowStatesDropdown(!showStatesDropdown);
+  };
+
+  const handleMaritalDropdownClick = () => {
+    if (!handleFieldInteraction("marital status")) return;
+    setShowMaritalDropdown(!showMaritalDropdown);
+  };
+
+  const handleLgaDropdownClick = () => {
+    if (!handleFieldInteraction("local government area")) return;
+    setShowLgaDropdown(!showLgaDropdown);
+  };
+
+  const handleTermsCheckbox = () => {
+    if (!handleFieldInteraction("terms of use")) return;
+    setAcceptedTerms(!acceptedTerms);
+  };
+
+  const handleFileUpload = (field, e) => {
+    if (!handleFieldInteraction(field)) return;
+    
+    if (field === 'photo') {
+      handlePhotoUpload(e);
+    } else if (field === 'banner') {
+      handleBannerUpload(e);
+    } else if (field === 'gallery') {
+      handleGalleryUpload(e);
+    }
+  };
+
+  const saveFormConfig = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("candidate_forms")
+        .upsert({
+          event_id: eventId,
+          ...formData,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+      setIsEditing(false);
+    } catch (error) {
+      console.error("Error saving form config:", error);
+      alert("Error saving form configuration");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Optimized file upload with compression
+  const uploadOptimizedFile = async (file, path, config) => {
+    const uploadId = Date.now().toString();
+    setActiveUploads(prev => [...prev, uploadId]);
+    
+    try {
+      // Compress the image before upload using client-side function
+      const compressedFile = await compressImageClientSide(file, config);
+      
+      const { data, error } = await supabase.storage
+        .from("candidates")
+        .upload(path, compressedFile, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (error) throw error;
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from("candidates")
+        .getPublicUrl(data.path);
+
+      return publicUrl;
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      throw error;
+    } finally {
+      setActiveUploads(prev => prev.filter(id => id !== uploadId));
+    }
+  };
+
+  // Upload file and create thumbnail
+  const uploadFileWithThumbnail = async (file, path, thumbnailPath, config) => {
+    const uploadId = Date.now().toString();
+    setActiveUploads(prev => [...prev, uploadId]);
+    
+    try {
+      // Compress main image using client-side function
+      const compressedFile = await compressImageClientSide(file, config);
+      
+      // Upload main image
+      const { data, error } = await supabase.storage
+        .from("candidates")
+        .upload(path, compressedFile, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (error) throw error;
+      
+      // Create and upload thumbnail using client-side function
+      const thumbnailFile = await createThumbnailClientSide(file);
+      const { error: thumbnailError } = await supabase.storage
+        .from("candidates")
+        .upload(thumbnailPath, thumbnailFile, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (thumbnailError) {
+        console.warn('Thumbnail upload failed:', thumbnailError);
+      }
+      
+      // Get public URLs
+      const { data: { publicUrl } } = supabase.storage
+        .from("candidates")
+        .getPublicUrl(data.path);
+        
+      const { data: { publicUrl: thumbnailUrl } } = supabase.storage
+        .from("candidates")
+        .getPublicUrl(thumbnailPath);
+
+      return { url: publicUrl, thumbnailUrl };
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      throw error;
+    } finally {
+      setActiveUploads(prev => prev.filter(id => id !== uploadId));
+    }
+  };
+
+  // Handle form banner upload
+  const handleFormBannerUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setUploadingFiles(prev => ({ ...prev, banner: true }));
+    try {
+      const path = `form-banners/${eventId}/${Date.now()}-${file.name}`;
+      const url = await uploadOptimizedFile(file, path, IMAGE_CONFIG.BANNER);
+      setFormData(prev => ({ ...prev, banner_url: url }));
+    } catch (error) {
+      alert("Error uploading banner");
+    } finally {
+      setUploadingFiles(prev => ({ ...prev, banner: false }));
+    }
+  };
+
+  // Handle photo upload with optimization
+  const handlePhotoUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!user) {
+      setLoginPromptEvent({
+        field: "photo",
+        message: "To upload your profile photo, you need to be logged in."
+      });
+      setShowLoginModal(true);
+      return;
+    }
+
+    setImageLoading(prev => ({ ...prev, photo: true }));
+    setUploadingFiles(prev => ({ ...prev, photo: true }));
+    
+    try {
+      const timestamp = Date.now();
+      const mainPath = `candidate-photo/${eventId}/${user.id}/${timestamp}-${file.name}`;
+      const thumbnailPath = `candidate-photo/thumbnails/${eventId}/${user.id}/${timestamp}-thumb-${file.name}`;
+      
+      // Upload with thumbnail
+      const result = await uploadFileWithThumbnail(file, mainPath, thumbnailPath, IMAGE_CONFIG.PROFILE);
+      
+      setCandidateData(prev => ({ ...prev, photo: result.url }));
+      setThumbnails(prev => ({ ...prev, photo: result.thumbnailUrl }));
+      setImageRequirements(prev => ({ ...prev, photoUploaded: true }));
+      
+      // Preload the image
+      const img = new window.Image();
+      img.src = result.url;
+      img.onload = () => handleImageLoad('photo');
+      img.onerror = () => handleImageError('photo');
+      
+    } catch (error) {
+      alert(`Error uploading photo: ${error.message}`);
+    } finally {
+      setUploadingFiles(prev => ({ ...prev, photo: false }));
+    }
+  };
+
+  // Handle banner upload with optimization
+  const handleBannerUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!user) {
+      setLoginPromptEvent({
+        field: "banner",
+        message: "To upload your banner, you need to be logged in."
+      });
+      setShowLoginModal(true);
+      return;
+    }
+
+    // Check image ratio before uploading
+    const ratioInfo = await getImageDimensions(file);
+    const ratio = ratioInfo.width / ratioInfo.height;
+    const isRecommended = Math.abs(ratio - 2.5) < 0.1;
+    
+    if (!isRecommended) {
+      const userConfirmed = window.confirm(
+        `Your banner image ratio is ${ratioInfo.width}:${ratioInfo.height} (approximately ${ratio.toFixed(2)}:1).\n` +
+        `For best display, we recommend 1000×400 pixels (2.5:1 ratio).\n` +
+        `Do you want to proceed with this image?`
+      );
+      
+      if (!userConfirmed) {
+        return;
+      }
+    }
+
+    setImageLoading(prev => ({ ...prev, banner: true }));
+    setUploadingFiles(prev => ({ ...prev, banner: true }));
+    
+    try {
+      const timestamp = Date.now();
+      const mainPath = `candidate-banner/${eventId}/${user.id}/${timestamp}-${file.name}`;
+      const thumbnailPath = `candidate-banner/thumbnails/${eventId}/${user.id}/${timestamp}-thumb-${file.name}`;
+      
+      // Upload with thumbnail
+      const result = await uploadFileWithThumbnail(file, mainPath, thumbnailPath, IMAGE_CONFIG.BANNER);
+      
+      setCandidateData(prev => ({ ...prev, banner: result.url }));
+      setThumbnails(prev => ({ ...prev, banner: result.thumbnailUrl }));
+      setImageRequirements(prev => ({ 
+        ...prev, 
+        bannerUploaded: true,
+        bannerRatioValid: isRecommended 
+      }));
+      
+      // Preload the image
+      const img = new window.Image();
+      img.src = result.url;
+      img.onload = () => handleImageLoad('banner');
+      img.onerror = () => handleImageError('banner');
+      
+    } catch (error) {
+      alert("Error uploading banner");
+    } finally {
+      setUploadingFiles(prev => ({ ...prev, banner: false }));
+    }
+  };
+
+  // Handle gallery upload with optimization
+  const handleGalleryUpload = async (event) => {
+    const files = Array.from(event.target.files);
+    
+    if (!user) {
+      setLoginPromptEvent({
+        field: "gallery photos",
+        message: "To upload gallery photos, you need to be logged in."
+      });
+      setShowLoginModal(true);
+      return;
+    }
+
+    if (!files.length || candidateData.gallery.length + files.length > 6) {
+      alert("Maximum 6 photos allowed in gallery");
+      return;
+    }
+
+    setImageLoading(prev => ({ ...prev, gallery: [] }));
+    setUploadingFiles(prev => ({ ...prev, gallery: true }));
+    
+    try {
+      const newGalleryItems = [];
+      const newThumbnails = [];
+      
+      for (const file of files) {
+        const timestamp = Date.now();
+        const mainPath = `candidate-gallery/${eventId}/${user.id}/${timestamp}-${file.name}`;
+        const thumbnailPath = `candidate-gallery/thumbnails/${eventId}/${user.id}/${timestamp}-thumb-${file.name}`;
+        
+        // Upload with thumbnail
+        const result = await uploadFileWithThumbnail(file, mainPath, thumbnailPath, IMAGE_CONFIG.GALLERY);
+        
+        newGalleryItems.push({ url: result.url, caption: "" });
+        newThumbnails.push(result.thumbnailUrl);
+        
+        // Update loading state for this gallery item
+        setLoadedImages(prev => ({
+          ...prev,
+          gallery: [...prev.gallery, false]
+        }));
+        setImageLoading(prev => ({
+          ...prev,
+          gallery: [...prev.gallery, true]
+        }));
+        
+        // Preload the image
+        const img = new window.Image();
+        img.src = result.url;
+        const index = candidateData.gallery.length + newGalleryItems.length - 1;
+        img.onload = () => handleImageLoad('gallery', index);
+        img.onerror = () => setImageLoading(prev => ({
+          ...prev,
+          gallery: prev.gallery.map((item, i) => i === index ? false : item)
+        }));
+      }
+
+      setCandidateData(prev => ({
+        ...prev,
+        gallery: [...prev.gallery, ...newGalleryItems]
+      }));
+      setThumbnails(prev => ({
+        ...prev,
+        gallery: [...prev.gallery, ...newThumbnails]
+      }));
+      
+    } catch (error) {
+      alert("Error uploading gallery photos");
+    } finally {
+      setUploadingFiles(prev => ({ ...prev, gallery: false }));
+    }
+  };
+
+  // Update gallery caption
+  const updateGalleryCaption = (index, caption) => {
+    if (!handleFieldInteraction("gallery captions")) return;
+    setCandidateData(prev => ({
+      ...prev,
+      gallery: prev.gallery.map((item, i) => 
+        i === index ? { ...item, caption } : item
+      )
+    }));
+  };
+
+  // Remove gallery item
+  const removeGalleryItem = (index) => {
+    if (!handleFieldInteraction("gallery management")) return;
+    setCandidateData(prev => ({
+      ...prev,
+      gallery: prev.gallery.filter((_, i) => i !== index)
+    }));
+    setThumbnails(prev => ({
+      ...prev,
+      gallery: prev.gallery.filter((_, i) => i !== index)
+    }));
+    setLoadedImages(prev => ({
+      ...prev,
+      gallery: prev.gallery.filter((_, i) => i !== index)
+    }));
+    setImageLoading(prev => ({
+      ...prev,
+      gallery: prev.gallery.filter((_, i) => i !== index)
+    }));
   };
 
   // Validate form fields
@@ -452,229 +960,6 @@ export default function CandidatesForm({ eventId, colors }) {
     return Object.keys(errors).length === 0;
   };
 
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showStatesDropdown && !event.target.closest('.state-dropdown-container')) {
-        setShowStatesDropdown(false);
-      }
-      if (showLgaDropdown && !event.target.closest('.lga-dropdown-container')) {
-        setShowLgaDropdown(false);
-      }
-      if (showMaritalDropdown && !event.target.closest('.marital-dropdown-container')) {
-        setShowMaritalDropdown(false);
-      }
-    };
-
-    document.addEventListener('click', handleClickOutside);
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [showStatesDropdown, showLgaDropdown, showMaritalDropdown]);
-
-  const saveFormConfig = async () => {
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from("candidate_forms")
-        .upsert({
-          event_id: eventId,
-          ...formData,
-          updated_at: new Date().toISOString(),
-        });
-
-      if (error) throw error;
-      setIsEditing(false);
-    } catch (error) {
-      console.error("Error saving form config:", error);
-      alert("Error saving form configuration");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const uploadFile = async (file, path) => {
-    const uploadId = Date.now().toString();
-    setActiveUploads(prev => [...prev, uploadId]);
-    
-    try {
-      const { data, error } = await supabase.storage
-        .from("candidates")
-        .upload(path, file);
-
-      if (error) throw error;
-      
-      const { data: { publicUrl } } = supabase.storage
-        .from("candidates")
-        .getPublicUrl(data.path);
-
-      return publicUrl;
-    } catch (error) {
-      console.error("Error uploading file:", error);
-      throw error;
-    } finally {
-      setActiveUploads(prev => prev.filter(id => id !== uploadId));
-    }
-  };
-
-  const handleFormBannerUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    setUploadingFiles(prev => ({ ...prev, banner: true }));
-    try {
-      const path = `form-banners/${eventId}/${Date.now()}-${file.name}`;
-      const url = await uploadFile(file, path);
-      setFormData(prev => ({ ...prev, banner_url: url }));
-    } catch (error) {
-      alert("Error uploading banner");
-    } finally {
-      setUploadingFiles(prev => ({ ...prev, banner: false }));
-    }
-  };
-
-  // Check image ratio for banner
-  const checkImageRatio = (file) => {
-    return new Promise((resolve) => {
-      const img = new window.Image();
-      img.onload = function() {
-        const ratio = this.width / this.height;
-        // Check for 2.5:1 ratio (1000:400 = 2.5)
-        const isRecommended = Math.abs(ratio - 2.5) < 0.1;
-        resolve({ width: this.width, height: this.height, ratio, isRecommended });
-      };
-      img.src = URL.createObjectURL(file);
-    });
-  };
-
-  const handlePhotoUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    if (!user) {
-      setLoginPromptEvent({
-        field: "photo",
-        message: "To upload your profile photo, you need to be logged in."
-      });
-      setShowLoginModal(true);
-      return;
-    }
-
-    setUploadingFiles(prev => ({ ...prev, photo: true }));
-    try {
-      const path = `candidate-photo/${eventId}/${user.id}/${Date.now()}-${file.name}`;
-      const url = await uploadFile(file, path);
-      setCandidateData(prev => ({ ...prev, photo: url }));
-      
-      setImageRequirements(prev => ({ ...prev, photoUploaded: true }));
-    } catch (error) {
-      alert(`Error uploading photo`);
-    } finally {
-      setUploadingFiles(prev => ({ ...prev, photo: false }));
-    }
-  };
-
-  const handleBannerUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    if (!user) {
-      setLoginPromptEvent({
-        field: "banner",
-        message: "To upload your banner, you need to be logged in."
-      });
-      setShowLoginModal(true);
-      return;
-    }
-
-    // Check image ratio before uploading
-    const ratioInfo = await checkImageRatio(file);
-    
-    if (!ratioInfo.isRecommended) {
-      const userConfirmed = window.confirm(
-        `Your banner image ratio is ${ratioInfo.width}:${ratioInfo.height} (approximately ${ratioInfo.ratio.toFixed(2)}:1).\n` +
-        `For best display, we recommend 1000×400 pixels (2.5:1 ratio).\n` +
-        `Do you want to proceed with this image?`
-      );
-      
-      if (!userConfirmed) {
-        return;
-      }
-    }
-
-    setUploadingFiles(prev => ({ ...prev, banner: true }));
-    try {
-      const path = `candidate-banner/${eventId}/${user.id}/${Date.now()}-${file.name}`;
-      const url = await uploadFile(file, path);
-      setCandidateData(prev => ({ ...prev, banner: url }));
-      setImageRequirements(prev => ({ 
-        ...prev, 
-        bannerUploaded: true,
-        bannerRatioValid: ratioInfo.isRecommended 
-      }));
-    } catch (error) {
-      alert("Error uploading banner");
-    } finally {
-      setUploadingFiles(prev => ({ ...prev, banner: false }));
-    }
-  };
-
-  const handleGalleryUpload = async (event) => {
-    const files = Array.from(event.target.files);
-    
-    if (!user) {
-      setLoginPromptEvent({
-        field: "gallery photos",
-        message: "To upload gallery photos, you need to be logged in."
-      });
-      setShowLoginModal(true);
-      return;
-    }
-
-    if (!files.length || candidateData.gallery.length + files.length > 6) {
-      alert("Maximum 6 photos allowed in gallery");
-      return;
-    }
-
-    setUploadingFiles(prev => ({ ...prev, gallery: true }));
-    try {
-      const newGalleryItems = await Promise.all(
-        files.map(async (file) => {
-          const path = `candidate-gallery/${eventId}/${user.id}/${Date.now()}-${file.name}`;
-          const url = await uploadFile(file, path);
-          return { url, caption: "" };
-        })
-      );
-
-      setCandidateData(prev => ({
-        ...prev,
-        gallery: [...prev.gallery, ...newGalleryItems]
-      }));
-    } catch (error) {
-      alert("Error uploading gallery photos");
-    } finally {
-      setUploadingFiles(prev => ({ ...prev, gallery: false }));
-    }
-  };
-
-  const updateGalleryCaption = (index, caption) => {
-    if (!handleFieldInteraction("gallery captions")) return;
-    setCandidateData(prev => ({
-      ...prev,
-      gallery: prev.gallery.map((item, i) => 
-        i === index ? { ...item, caption } : item
-      )
-    }));
-  };
-
-  const removeGalleryItem = (index) => {
-    if (!handleFieldInteraction("gallery management")) return;
-    setCandidateData(prev => ({
-      ...prev,
-      gallery: prev.gallery.filter((_, i) => i !== index)
-    }));
-  };
-
   const checkWalletBalance = async () => {
     if (!user) return false;
 
@@ -693,6 +978,27 @@ export default function CandidatesForm({ eventId, colors }) {
     }
   };
 
+  // Get candidate's name from users table
+  const getCandidateName = async (userId) => {
+    try {
+      const { data: userData, error } = await supabase
+        .from("users")
+        .select("name")
+        .eq("id", userId)
+        .single();
+
+      if (error) {
+        console.error("Error fetching candidate name:", error);
+        return "User";
+      }
+
+      return userData?.name || "User";
+    } catch (error) {
+      console.error("Error fetching candidate name:", error);
+      return "User";
+    }
+  };
+
   const deductTokens = async () => {
     try {
       // Get current balance
@@ -705,9 +1011,12 @@ export default function CandidatesForm({ eventId, colors }) {
       if (walletError) throw walletError;
 
       const newBalance = wallet.balance - formData.token_price;
-      const lastAction = `${event?.name || event?.title} - ${formData.title}`;
+      
+      // Get candidate name
+      const candidateName = await getCandidateName(user.id);
+      const lastAction = `${event?.name} - ${formData.title} by ${candidateName}`;
 
-      // Update wallet
+      // Update candidate's wallet (deduct tokens)
       const { error: updateError } = await supabase
         .from("token_wallets")
         .update({
@@ -723,6 +1032,81 @@ export default function CandidatesForm({ eventId, colors }) {
       console.error("Error deducting tokens:", error);
       return false;
     }
+  };
+
+  // Credit tokens to event owner's wallet
+  const creditTokensToOwner = async () => {
+    if (!eventOwnerId) {
+      console.error("Event owner ID not found");
+      return false;
+    }
+
+    try {
+      // Get event owner's current wallet balance
+      const { data: ownerWallet, error: walletError } = await supabase
+        .from("token_wallets")
+        .select("balance")
+        .eq("user_id", eventOwnerId)
+        .single();
+
+      if (walletError) {
+        // If owner doesn't have a wallet yet, create one
+        if (walletError.code === 'PGRST116') {
+          console.log("Creating new wallet for event owner");
+          const { error: createError } = await supabase
+            .from("token_wallets")
+            .insert({
+              user_id: eventOwnerId,
+              balance: formData.token_price,
+              last_action: `Candidacy registration for ${event?.name} by ${candidateData.full_name || "Candidate"}`,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+
+          if (createError) throw createError;
+          return true;
+        }
+        throw walletError;
+      }
+
+      // Calculate new balance for owner
+      const newOwnerBalance = ownerWallet.balance + formData.token_price;
+      const lastAction = `Candidacy registration for ${event?.name} by ${candidateData.full_name || "Candidate"}`;
+
+      // Update owner's wallet (credit tokens)
+      const { error: updateError } = await supabase
+        .from("token_wallets")
+        .update({
+          balance: newOwnerBalance,
+          last_action: lastAction,
+          updated_at: new Date().toISOString()
+        })
+        .eq("user_id", eventOwnerId);
+
+      if (updateError) throw updateError;
+      return true;
+    } catch (error) {
+      console.error("Error crediting tokens to owner:", error);
+      return false;
+    }
+  };
+
+  // Process token transfer transaction
+  const processTokenTransaction = async () => {
+    // Start a transaction by deducting from candidate
+    const deductionSuccess = await deductTokens();
+    if (!deductionSuccess) {
+      return false;
+    }
+
+    // Then credit to event owner
+    const creditSuccess = await creditTokensToOwner();
+    if (!creditSuccess) {
+      console.error("Failed to credit tokens to owner after deducting from candidate");
+      return false;
+    }
+
+    return true;
   };
 
   const submitCandidateForm = async () => {
@@ -765,7 +1149,7 @@ export default function CandidatesForm({ eventId, colors }) {
     setSaving(true);
 
     try {
-      // For paid forms, deduct tokens first
+      // For paid forms, process token transfer first
       if (formData.is_paid && formData.token_price > 0) {
         const hasSufficientBalance = await checkWalletBalance();
         if (!hasSufficientBalance) {
@@ -775,9 +1159,10 @@ export default function CandidatesForm({ eventId, colors }) {
           return;
         }
 
-        const deductionSuccess = await deductTokens();
-        if (!deductionSuccess) {
-          alert("Error processing payment. Please try again.");
+        // Process token transaction (deduct from candidate and credit to owner)
+        const transactionSuccess = await processTokenTransaction();
+        if (!transactionSuccess) {
+          alert("Error processing token transaction. Please try again.");
           setSaving(false);
           setShowPaymentModal(false);
           return;
@@ -827,6 +1212,10 @@ export default function CandidatesForm({ eventId, colors }) {
         aboutWordCount: 0,
         aboutValid: false
       });
+      // Also reset gallery loading states
+      setLoadedImages(prev => ({ ...prev, gallery: [] }));
+      setImageLoading(prev => ({ ...prev, gallery: [] }));
+      setThumbnails(prev => ({ ...prev, gallery: [] }));
     } catch (error) {
       console.error("Error submitting candidate form:", error);
       alert("Error submitting application");
@@ -929,7 +1318,7 @@ export default function CandidatesForm({ eventId, colors }) {
           Candidate Form Not Available
         </h3>
         <p className="text-gray-600" style={{ color: colors.text }}>
-          {event?.name || event?.title} candidate form is not currently accepting applications. Please check back later.
+          {event?.name} candidate form is not currently accepting applications. Please check back later.
         </p>
       </div>
     );
@@ -944,7 +1333,7 @@ export default function CandidatesForm({ eventId, colors }) {
           Application Already Submitted
         </h3>
         <p className="text-gray-600 mb-4" style={{ color: colors.text }}>
-          You have already submitted an application for {event?.name || event?.title}.
+          You have already submitted an application for {event?.name}.
         </p>
         <p className="text-sm text-gray-500">
           You can apply to other events or forms.
@@ -966,10 +1355,10 @@ export default function CandidatesForm({ eventId, colors }) {
               <Coins className="w-8 h-8 mx-auto mb-2" style={{ color: colors.primary }} />
               <h3 className="text-sm font-semibold mb-1">Confirm Payment</h3>
               <p className="text-xs text-gray-600 mb-2">
-                {formData.token_price} token(s) will be deducted from your wallet.
+                {formData.token_price} token(s) will be deducted from your wallet and credited to the event organizer.
               </p>
               <p className="text-xs text-gray-500">
-                Event: {event?.name || event?.title}
+                Event: {event?.name}
               </p>
             </div>
             <div className="flex space-x-2">
@@ -1016,16 +1405,23 @@ export default function CandidatesForm({ eventId, colors }) {
         </div>
       )}
 
-      {/* Form Banner */}
+      {/* Form Banner with optimized loading */}
       {(formData.banner_url || isEditing) && (
         <div className="mb-6">
           <div 
-            className="w-full h-28 rounded-lg bg-cover bg-center mb-2 relative"
+            className="w-full h-28 rounded-lg bg-cover bg-center mb-2 relative overflow-hidden"
             style={{ 
               backgroundImage: formData.banner_url ? `url(${formData.banner_url})` : 'none',
               backgroundColor: formData.banner_url ? 'transparent' : colors.primary + '20'
             }}
           >
+            {/* Loading overlay for banner */}
+            {!loadedImages.banner && formData.banner_url && (
+              <div className="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center">
+                <Loader className="w-6 h-6 text-gray-400 animate-spin" />
+              </div>
+            )}
+            
             {isEditing && (
               <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
                 <label className="flex items-center space-x-2 px-3 py-1.5 bg-white rounded-lg cursor-pointer hover:bg-gray-100 text-sm">
@@ -1174,7 +1570,7 @@ export default function CandidatesForm({ eventId, colors }) {
             <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200">
               <Coins className="w-3.5 h-3.5" style={{ color: colors.primary }} />
               <span className="text-xs font-medium" style={{ color: colors.primary }}>
-                Fee: {formData.token_price} Token(s)
+                Fee: {formData.token_price} Token(s) - Paid to Event Organizer
               </span>
             </div>
           )}
@@ -1643,7 +2039,7 @@ export default function CandidatesForm({ eventId, colors }) {
             )}
           </div>
 
-          {/* Profile Photo */}
+          {/* Profile Photo with optimized loading */}
           <div>
             <div className="flex justify-between items-center mb-1.5">
               <label className="block text-xs font-medium" style={{ color: colors.text }}>
@@ -1657,24 +2053,49 @@ export default function CandidatesForm({ eventId, colors }) {
               )}
             </div>
             <div className="flex items-center space-x-3">
-              {candidateData.photo ? (
-                <div className="relative">
-                  <img 
-                    src={candidateData.photo} 
-                    alt="Profile" 
-                    className="w-12 h-12 rounded-full object-cover"
-                  />
-                  {uploadingFiles.photo && (
-                    <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
-                      <Loader className="w-4 h-4 text-white animate-spin" />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
-                  <Camera className="w-5 h-5 text-gray-400" />
-                </div>
-              )}
+              <div className="relative">
+                {candidateData.photo ? (
+                  <>
+                    {/* Loading skeleton */}
+                    {imageLoading.photo && (
+                      <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-full flex items-center justify-center">
+                        <Loader className="w-4 h-4 text-gray-400 animate-spin" />
+                      </div>
+                    )}
+                    
+                    {/* Thumbnail placeholder */}
+                    {!loadedImages.photo && thumbnails.photo && (
+                      <img 
+                        src={thumbnails.photo} 
+                        alt="Profile thumbnail" 
+                        className="w-12 h-12 rounded-full object-cover"
+                        loading="lazy"
+                      />
+                    )}
+                    
+                    {/* Full image with lazy loading */}
+                    <img 
+                      src={candidateData.photo} 
+                      alt="Profile" 
+                      className={`w-12 h-12 rounded-full object-cover ${!loadedImages.photo && thumbnails.photo ? 'hidden' : ''}`}
+                      loading="lazy"
+                      onLoad={() => handleImageLoad('photo')}
+                      onError={() => handleImageError('photo')}
+                    />
+                  </>
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                    <Camera className="w-5 h-5 text-gray-400" />
+                  </div>
+                )}
+                
+                {uploadingFiles.photo && (
+                  <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                    <Loader className="w-4 h-4 text-white animate-spin" />
+                  </div>
+                )}
+              </div>
+              
               <label className="flex items-center space-x-1.5 px-3 py-1.5 border rounded cursor-pointer hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
                 {uploadingFiles.photo ? (
                   <Loader className="w-3.5 h-3.5 animate-spin" />
@@ -1688,7 +2109,7 @@ export default function CandidatesForm({ eventId, colors }) {
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) => handleFileUpload('photo', e)}
+                  onChange={(e) => handlePhotoUpload(e)}
                   disabled={uploadingFiles.photo}
                 />
               </label>
@@ -1708,7 +2129,7 @@ export default function CandidatesForm({ eventId, colors }) {
             )}
           </div>
 
-          {/* Banner Photo */}
+          {/* Banner Photo with optimized loading */}
           <div>
             <div className="flex justify-between items-center mb-1.5">
               <label className="block text-xs font-medium" style={{ color: colors.text }}>
@@ -1730,24 +2151,49 @@ export default function CandidatesForm({ eventId, colors }) {
               )}
             </div>
             <div className="space-y-1.5">
-              {candidateData.banner ? (
-                <div className="relative">
-                  <img 
-                    src={candidateData.banner} 
-                    alt="Banner" 
-                    className="w-full h-24 rounded-lg object-cover"
-                  />
-                  {uploadingFiles.banner && (
-                    <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
-                      <Loader className="w-4 h-4 text-white animate-spin" />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="w-full h-24 rounded-lg bg-gray-200 flex items-center justify-center">
-                  <Image className="w-6 h-6 text-gray-400" />
-                </div>
-              )}
+              <div className="relative">
+                {candidateData.banner ? (
+                  <>
+                    {/* Loading skeleton */}
+                    {imageLoading.banner && (
+                      <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
+                        <Loader className="w-6 h-6 text-gray-400 animate-spin" />
+                      </div>
+                    )}
+                    
+                    {/* Thumbnail placeholder */}
+                    {!loadedImages.banner && thumbnails.banner && (
+                      <img 
+                        src={thumbnails.banner} 
+                        alt="Banner thumbnail" 
+                        className="w-full h-24 rounded-lg object-cover"
+                        loading="lazy"
+                      />
+                    )}
+                    
+                    {/* Full image with lazy loading */}
+                    <img 
+                      src={candidateData.banner} 
+                      alt="Banner" 
+                      className={`w-full h-24 rounded-lg object-cover ${!loadedImages.banner && thumbnails.banner ? 'hidden' : ''}`}
+                      loading="lazy"
+                      onLoad={() => handleImageLoad('banner')}
+                      onError={() => handleImageError('banner')}
+                    />
+                  </>
+                ) : (
+                  <div className="w-full h-24 rounded-lg bg-gray-200 flex items-center justify-center">
+                    <Image className="w-6 h-6 text-gray-400" />
+                  </div>
+                )}
+                
+                {uploadingFiles.banner && (
+                  <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                    <Loader className="w-4 h-4 text-white animate-spin" />
+                  </div>
+                )}
+              </div>
+              
               <label className="flex items-center space-x-1.5 px-3 py-1.5 border rounded cursor-pointer hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
                 {uploadingFiles.banner ? (
                   <Loader className="w-3.5 h-3.5 animate-spin" />
@@ -1761,7 +2207,7 @@ export default function CandidatesForm({ eventId, colors }) {
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) => handleFileUpload('banner', e)}
+                  onChange={(e) => handleBannerUpload(e)}
                   disabled={uploadingFiles.banner}
                 />
               </label>
@@ -1772,7 +2218,7 @@ export default function CandidatesForm({ eventId, colors }) {
             </p>
           </div>
 
-          {/* Gallery */}
+          {/* Gallery with optimized loading */}
           <div>
             <div className="flex justify-between items-center mb-1.5">
               <label className="block text-xs font-medium" style={{ color: colors.text }}>
@@ -1787,11 +2233,38 @@ export default function CandidatesForm({ eventId, colors }) {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
               {candidateData.gallery.map((item, index) => (
                 <div key={index} className="relative group">
-                  <img 
-                    src={item.url} 
-                    alt={`Gallery ${index + 1}`}
-                    className="w-full h-20 rounded-lg object-cover"
-                  />
+                  <div className="relative">
+                    {/* Loading skeleton */}
+                    {imageLoading.gallery?.[index] && (
+                      <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
+                        <Loader className="w-4 h-4 text-gray-400 animate-spin" />
+                      </div>
+                    )}
+                    
+                    {/* Thumbnail placeholder */}
+                    {!loadedImages.gallery?.[index] && thumbnails.gallery?.[index] && (
+                      <img 
+                        src={thumbnails.gallery[index]} 
+                        alt={`Gallery thumbnail ${index + 1}`}
+                        className="w-full h-20 rounded-lg object-cover"
+                        loading="lazy"
+                      />
+                    )}
+                    
+                    {/* Full image with lazy loading */}
+                    <img 
+                      src={item.url} 
+                      alt={`Gallery ${index + 1}`}
+                      className={`w-full h-20 rounded-lg object-cover ${!loadedImages.gallery?.[index] && thumbnails.gallery?.[index] ? 'hidden' : ''}`}
+                      loading="lazy"
+                      onLoad={() => handleImageLoad('gallery', index)}
+                      onError={() => setImageLoading(prev => ({
+                        ...prev,
+                        gallery: prev.gallery.map((item, i) => i === index ? false : item)
+                      }))}
+                    />
+                  </div>
+                  
                   <input
                     type="text"
                     value={item.caption}
@@ -1804,9 +2277,10 @@ export default function CandidatesForm({ eventId, colors }) {
                     }}
                     onClick={() => !user && setShowLoginModal(true)}
                   />
+                  
                   <button
                     onClick={() => removeGalleryItem(index)}
-                    className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
                   >
                     <Trash2 className="w-2.5 h-2.5" />
                   </button>
@@ -1829,7 +2303,7 @@ export default function CandidatesForm({ eventId, colors }) {
                     accept="image/*"
                     multiple
                     className="hidden"
-                    onChange={(e) => handleFileUpload('gallery', e)}
+                    onChange={(e) => handleGalleryUpload(e)}
                     disabled={uploadingFiles.gallery || !user}
                   />
                 </label>

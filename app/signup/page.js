@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Eye, EyeOff, Users, Star, X, Check, Camera, XCircle } from 'lucide-react';
+import { Eye, EyeOff, Users, Star, X, Check, Camera, XCircle, AlertCircle } from 'lucide-react';
 
 function PasswordInput({ value, onChange }) {
   const [showPassword, setShowPassword] = useState(false);
@@ -46,7 +46,7 @@ export default function Signup() {
         country: '',
         state: '',
         city: '',
-        role: 'publisher',
+        role: 'fans', // Changed default to 'fans' (participant)
       };
     }
     return {
@@ -57,7 +57,7 @@ export default function Signup() {
       country: '',
       state: '',
       city: '',
-      role: 'publisher',
+      role: 'fans', // Changed default to 'fans' (participant)
     };
   });
 
@@ -68,6 +68,7 @@ export default function Signup() {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [showPublisherInfo, setShowPublisherInfo] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
 
   // Save form data to localStorage whenever it changes
   useEffect(() => {
@@ -104,8 +105,39 @@ export default function Signup() {
     }
   }, [agreedToTerms]);
 
+  // Validate form
+  const validateForm = () => {
+    const errors = {};
+    
+    // Check required fields
+    if (!form.firstName.trim()) errors.firstName = 'First name is required';
+    if (!form.lastName.trim()) errors.lastName = 'Last name is required';
+    if (!form.email.trim()) errors.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = 'Please enter a valid email address';
+    
+    if (!form.password) errors.password = 'Password is required';
+    else if (form.password.length < 8) errors.password = 'Password must be at least 8 characters';
+    
+    if (!form.country.trim()) errors.country = 'Country is required';
+    
+    // Check if profile photo is uploaded
+    if (!avatarFile && !avatarPreview) {
+      errors.avatar = 'Profile photo is required';
+    }
+    
+    if (!agreedToTerms) errors.terms = 'You must agree to the Terms of Service';
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    // Clear error for this field when user starts typing
+    if (formErrors[name]) {
+      setFormErrors(prev => ({ ...prev, [name]: '' }));
+    }
     
     // If user is switching to publisher, show the info popup
     if (name === 'role' && value === 'publisher' && form.role !== 'publisher') {
@@ -147,16 +179,23 @@ export default function Signup() {
     // Check file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       setErrorMsg('Image size must be less than 5MB');
+      setFormErrors(prev => ({ ...prev, avatar: 'Image size must be less than 5MB' }));
       return;
     }
     
     // Check file type
     if (!file.type.startsWith('image/')) {
       setErrorMsg('Please upload an image file');
+      setFormErrors(prev => ({ ...prev, avatar: 'Please upload an image file' }));
       return;
     }
     
     setAvatarFile(file);
+    
+    // Clear avatar error
+    if (formErrors.avatar) {
+      setFormErrors(prev => ({ ...prev, avatar: '' }));
+    }
     
     // Create preview URL
     const reader = new FileReader();
@@ -174,6 +213,9 @@ export default function Signup() {
       fileInputRef.current.value = '';
     }
     
+    // Set avatar error
+    setFormErrors(prev => ({ ...prev, avatar: 'Profile photo is required' }));
+    
     // Remove from localStorage
     if (typeof window !== 'undefined') {
       localStorage.removeItem('gleedz_signup_avatar_preview');
@@ -188,9 +230,18 @@ export default function Signup() {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
-
-    if (!agreedToTerms) {
-      setErrorMsg('You must agree to the Terms of Service to continue.');
+    
+    // Validate form before submission
+    if (!validateForm()) {
+      // Scroll to first error
+      const firstErrorField = Object.keys(formErrors)[0];
+      if (firstErrorField) {
+        const element = document.querySelector(`[name="${firstErrorField}"]`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.focus();
+        }
+      }
       return;
     }
 
@@ -216,7 +267,7 @@ export default function Signup() {
     const userId = authData.user.id;
     const fullName = `${firstName} ${lastName}`;
 
-    // 2️⃣ Upload profile picture if provided
+    // 2️⃣ Upload profile picture (mandatory now)
     let avatarUrl = null;
     if (avatarFile) {
       const folder = role === 'publisher' ? 'publishers' : 'fans';
@@ -311,11 +362,12 @@ export default function Signup() {
       country: '',
       state: '',
       city: '',
-      role: 'publisher',
+      role: 'fans', // Reset to fans
     });
     setAvatarFile(null);
     setAvatarPreview(null);
     setAgreedToTerms(false);
+    setFormErrors({});
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -413,11 +465,11 @@ export default function Signup() {
           Create your Gleedz Account
         </h2>
 
-        {/* Profile Picture Upload with Preview */}
+        {/* Profile Picture Upload with Preview - MANDATORY */}
         <div className="flex flex-col items-center space-y-3">
           <div className="relative group">
             <div 
-              className="w-24 h-24 rounded-full overflow-hidden border-2 border-gray-300 cursor-pointer hover:border-yellow-500 transition-colors"
+              className={`w-24 h-24 rounded-full overflow-hidden border-2 cursor-pointer transition-colors ${formErrors.avatar ? 'border-red-500' : 'border-gray-300 hover:border-yellow-500'}`}
               onClick={triggerFileInput}
             >
               {avatarPreview ? (
@@ -427,8 +479,9 @@ export default function Signup() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                  <Camera className="w-8 h-8 text-gray-400" />
+                <div className="w-full h-full bg-gray-100 flex flex-col items-center justify-center">
+                  <Camera className="w-8 h-8 text-gray-400 mb-1" />
+                  <span className="text-xs text-gray-500">Add Photo</span>
                 </div>
               )}
               
@@ -466,107 +519,142 @@ export default function Signup() {
             >
               {avatarPreview ? 'Change Profile Photo' : 'Upload Profile Photo'}
             </button>
-            <p className="text-xs text-gray-500 mt-1">JPG, PNG or GIF. Max 5MB</p>
+            <p className="text-xs text-gray-500 mt-1">JPG, PNG or GIF. Max 5MB *Required</p>
+            {formErrors.avatar && (
+              <div className="mt-1 text-xs text-red-600 flex items-center justify-center">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                {formErrors.avatar}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Name fields */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <input
-            type="text"
-            name="firstName"
-            placeholder="First name"
-            required
-            value={form.firstName}
-            onChange={handleChange}
-            className="p-2 text-sm border rounded-lg bg-white text-black focus:outline-none focus:border-gold-700"
-          />
-          <input
-            type="text"
-            name="lastName"
-            placeholder="Last name"
-            required
-            value={form.lastName}
-            onChange={handleChange}
-            className="p-2 text-sm border rounded-lg bg-white text-black focus:outline-none focus:border-gold-700"
-          />
+          <div>
+            <input
+              type="text"
+              name="firstName"
+              placeholder="First name *"
+              required
+              value={form.firstName}
+              onChange={handleChange}
+              className={`w-full p-3 border rounded-lg bg-white text-black focus:outline-none ${formErrors.firstName ? 'border-red-500 focus:border-red-500' : 'focus:border-gold-700'}`}
+            />
+            {formErrors.firstName && (
+              <p className="text-xs text-red-600 mt-1 flex items-center">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                {formErrors.firstName}
+              </p>
+            )}
+          </div>
+          <div>
+            <input
+              type="text"
+              name="lastName"
+              placeholder="Last name *"
+              required
+              value={form.lastName}
+              onChange={handleChange}
+              className={`w-full p-3 border rounded-lg bg-white text-black focus:outline-none ${formErrors.lastName ? 'border-red-500 focus:border-red-500' : 'focus:border-gold-700'}`}
+            />
+            {formErrors.lastName && (
+              <p className="text-xs text-red-600 mt-1 flex items-center">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                {formErrors.lastName}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Email + Password */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <input
-            type="email"
-            name="email"
-            placeholder="Work email address"
-            required
-            value={form.email}
-            onChange={handleChange}
-            className="p-2 text-sm border rounded-lg bg-white text-black focus:outline-none focus:border-gold-700"
-          />
-          <PasswordInput value={form.password} onChange={handleChange} />
+          <div>
+            <input
+              type="email"
+              name="email"
+              placeholder="Email address *"
+              required
+              value={form.email}
+              onChange={handleChange}
+              className={`w-full p-3 border rounded-lg bg-white text-black focus:outline-none ${formErrors.email ? 'border-red-500 focus:border-red-500' : 'focus:border-gold-700'}`}
+            />
+            {formErrors.email && (
+              <p className="text-xs text-red-600 mt-1 flex items-center">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                {formErrors.email}
+              </p>
+            )}
+          </div>
+          <div>
+            <PasswordInput value={form.password} onChange={handleChange} />
+            {formErrors.password && (
+              <p className="text-xs text-red-600 mt-1 flex items-center">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                {formErrors.password}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Country / State / City */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <input
-            list="countries"
-            type="text"
-            name="country"
-            placeholder="Country"
-            value={form.country}
-            onChange={handleChange}
-            className="p-2 text-sm border rounded-lg bg-white text-black focus:outline-none focus:border-gold-700"
-            required
-          />
-          <input
-            type="text"
-            name="state"
-            placeholder="State"
-            value={form.state}
-            onChange={handleChange}
-            className="p-2 text-sm border rounded-lg bg-white text-black focus:outline-none focus:border-gold-700"
-          />
-          <input
-            type="text"
-            name="city"
-            placeholder="City"
-            value={form.city}
-            onChange={handleChange}
-            className="p-2 text-sm border rounded-lg bg-white text-black focus:outline-none focus:border-gold-700"
-          />
+          <div>
+            <input
+              list="countries"
+              type="text"
+              name="country"
+              placeholder="Country *"
+              value={form.country}
+              onChange={handleChange}
+              className={`w-full p-3 border rounded-lg bg-white text-black focus:outline-none ${formErrors.country ? 'border-red-500 focus:border-red-500' : 'focus:border-gold-700'}`}
+              required
+            />
+            <datalist id="countries">
+              {[
+                "Nigeria","Ghana","Kenya","South Africa","United States","United Kingdom","Canada",
+                "Australia","Germany","France","India","China","Brazil","Mexico","Japan","Italy","Spain",
+                "Egypt","Ethiopia","Uganda","Tanzania","Cameroon","Senegal","Ivory Coast","Rwanda","Zambia",
+                "Zimbabwe","Malawi","Mozambique","South Sudan","Morocco","Tunisia","Algeria","Turkey",
+                "Saudi Arabia","United Arab Emirates","Qatar","Russia","Ukraine","Netherlands","Sweden",
+                "Norway","Denmark","Switzerland","Belgium","Portugal","Poland","Argentina","Chile",
+                "Colombia","Peru","Venezuela","Pakistan","Bangladesh","Philippines","Malaysia","Singapore"
+              ].map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+            {formErrors.country && (
+              <p className="text-xs text-red-600 mt-1 flex items-center">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                {formErrors.country}
+              </p>
+            )}
+          </div>
+          <div>
+            <input
+              type="text"
+              name="state"
+              placeholder="State"
+              value={form.state}
+              onChange={handleChange}
+              className="w-full p-3 border rounded-lg bg-white text-black focus:outline-none focus:border-gold-700"
+            />
+          </div>
+          <div>
+            <input
+              type="text"
+              name="city"
+              placeholder="City"
+              value={form.city}
+              onChange={handleChange}
+              className="w-full p-3 border rounded-lg bg-white text-black focus:outline-none focus:border-gold-700"
+            />
+          </div>
         </div>
 
-        <datalist id="countries">
-          {[
-            "Nigeria","Ghana","Kenya","South Africa","United States","United Kingdom","Canada",
-            "Australia","Germany","France","India","China","Brazil","Mexico","Japan","Italy","Spain",
-            "Egypt","Ethiopia","Uganda","Tanzania","Cameroon","Senegal","Ivory Coast","Rwanda","Zambia",
-            "Zimbabwe","Malawi","Mozambique","South Sudan","Morocco","Tunisia","Algeria","Turkey",
-            "Saudi Arabia","United Arab Emirates","Qatar","Russia","Ukraine","Netherlands","Sweden",
-            "Norway","Denmark","Switzerland","Belgium","Portugal","Poland","Argentina","Chile",
-            "Colombia","Peru","Venezuela","Pakistan","Bangladesh","Philippines","Malaysia","Singapore"
-          ].map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
-
-        {/* Role selection */}
+        {/* Role selection - Participant is default */}
         <div className="flex flex-col md:flex-row md:space-x-6">
           <label className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors">
-            <input
-              type="radio"
-              name="role"
-              value="publisher"
-              checked={form.role === 'publisher'}
-              onChange={handleChange}
-              className="accent-gold-700"
-            />
-            <div className="flex items-center">
-              <Users className="w-4 h-4 mr-2 text-yellow-600" />
-              <span>I'm an Event Producer</span>
-            </div>
-          </label>
-          <label className="flex items-center space-x-2 mt-2 md:mt-0 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors">
             <input
               type="radio"
               name="role"
@@ -580,18 +668,32 @@ export default function Signup() {
               <span>I'm a Participant</span>
             </div>
           </label>
+          <label className="flex items-center space-x-2 mt-2 md:mt-0 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors">
+            <input
+              type="radio"
+              name="role"
+              value="publisher"
+              checked={form.role === 'publisher'}
+              onChange={handleChange}
+              className="accent-gold-700"
+            />
+            <div className="flex items-center">
+              <Users className="w-4 h-4 mr-2 text-yellow-600" />
+              <span>I'm an Event Producer</span>
+            </div>
+          </label>
         </div>
 
         {/* Role description hint */}
         <div className="text-xs text-gray-500 italic mt-1">
           {form.role === 'publisher' ? (
             <span className="flex items-center">
-              <Star className="w-3 h-3 mr-1 text-yellow-600" />
+              <Users className="w-3 h-3 mr-1 text-yellow-600" />
               Event Producers can create and manage events on Gleedz
             </span>
           ) : (
             <span className="flex items-center">
-              <Users className="w-3 h-3 mr-1 text-blue-600" />
+              <Star className="w-3 h-3 mr-1 text-blue-600" />
               Participants can join events, vote, and buy tickets
             </span>
           )}
@@ -602,14 +704,27 @@ export default function Signup() {
           <input
             type="checkbox"
             checked={agreedToTerms}
-            onChange={e => setAgreedToTerms(e.target.checked)}
-            className="mt-1 accent-gold-700"
+            onChange={e => {
+              setAgreedToTerms(e.target.checked);
+              if (formErrors.terms) {
+                setFormErrors(prev => ({ ...prev, terms: '' }));
+              }
+            }}
+            className={`mt-1 accent-gold-700 ${formErrors.terms ? 'border-red-500' : ''}`}
             required
           />
-          <label className="text-gray-700 text-sm">
-            Yes, I understand and agree to Gleedz&nbsp;
-            <Link href="/terms-agreement-policy" className="text-gold-700 hover:text-gold-500 underline">Terms of Service, User Agreement and Privacy Policy</Link>.
-          </label>
+          <div className="flex-1">
+            <label className="text-gray-700 text-sm">
+              Yes, I understand and agree to Gleedz&nbsp;
+              <Link href="/terms-agreement-policy" className="text-gold-700 hover:text-gold-500 underline">Terms of Service, User Agreement and Privacy Policy</Link>.
+            </label>
+            {formErrors.terms && (
+              <p className="text-xs text-red-600 mt-1 flex items-center">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                {formErrors.terms}
+              </p>
+            )}
+          </div>
         </div>
 
         {errorMsg && <p className="text-red-600 text-sm">{errorMsg}</p>}
@@ -632,6 +747,11 @@ export default function Signup() {
 
         <div className="text-sm text-center">
           <Link href="/auth/reset-password" className="text-gray-600 hover:text-gold-500 underline">Forgot password? Reset</Link>
+        </div>
+
+        {/* Required fields note */}
+        <div className="text-xs text-gray-500 text-center mt-4">
+          * Required fields must be filled
         </div>
       </form>
     </div>
