@@ -1,14 +1,13 @@
-// app/layout.js - UPDATED for Supabase auth
+// app/layout.js - FIXED VERSION
 import { Inter } from 'next/font/google';
 import "./globals.css";
 import Providers from "./providers";
 import BottomNav from "../components/BottomNav";
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
 const inter = Inter({ subsets: ['latin'] });
 
-// METADATA - Keep icons here for SEO, but we'll also add manual links for cache control
+// METADATA
 export const metadata = {
   title: 'Gleedz - Premium Event Platform',
   description: 'Gleedz is a platform for premium events.',
@@ -49,7 +48,6 @@ export const metadata = {
     images: ['https://gleedz.com/og-image.png'],
     creator: '@gleedz',
   },
-  // ICONS for metadata
   icons: {
     icon: [
       { url: '/favicon.ico?v=4' },
@@ -75,7 +73,6 @@ export const metadata = {
   },
 };
 
-// VIEWPORT
 export const viewport = {
   themeColor: '#D4AF37',
   width: 'device-width',
@@ -84,22 +81,31 @@ export const viewport = {
 };
 
 export default async function RootLayout({ children }) {
-  // CREATE SUPABASE SERVER CLIENT FOR SESSION
-  const supabase = createServerComponentClient({ cookies });
+  // Get cookies for session handling
+  const cookieStore = cookies();
   
-  // Get Supabase session (not next-auth!)
-  const { data: { session } } = await supabase.auth.getSession();
+  // Initialize session as null (will be set on client-side)
+  let session = null;
   
-  // Add debugging
-  console.log('Layout - Session exists:', !!session);
-  if (session) {
-    console.log('Layout - User ID:', session.user.id);
+  // Only try to get session if we have auth cookies
+  try {
+    // Check if we have auth cookies without making a full request
+    const authCookie = cookieStore.get('sb-mttimgygxzfqzmnirfyq-auth-token');
+    
+    if (authCookie?.value) {
+      // We have auth cookies, but we'll let client-side handle the session
+      // This prevents server-side errors from invalid sessions
+      session = { hasCookie: true };
+    }
+  } catch (error) {
+    console.log('No auth session found or error:', error.message);
+    // Continue without session - client will handle it
   }
 
   return (
-    <html lang="en" className={inter.className}>
+    <html lang="en" className={inter.className} suppressHydrationWarning>
       <head>
-        {/* MANUAL FAVICON LINKS WITH CACHE BUSTING - Most important */}
+        {/* Favicon links */}
         <link rel="icon" href="/favicon.ico?v=4" type="image/x-icon" />
         <link rel="shortcut icon" href="/favicon.ico?v=4" type="image/x-icon" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=4" />
@@ -115,7 +121,7 @@ export default async function RootLayout({ children }) {
         {/* Additional meta tags */}
         <link rel="canonical" href="https://gleedz.com" />
         
-        {/* Structured Data for Organization */}
+        {/* Structured Data */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -136,28 +142,88 @@ export default async function RootLayout({ children }) {
           }}
         />
         
-        {/* Add performance monitoring */}
+        {/* Prevent video autoplay errors */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              // Prevent video autoplay errors
+              document.addEventListener('DOMContentLoaded', function() {
+                const videos = document.querySelectorAll('video');
+                videos.forEach(video => {
+                  video.playsInline = true;
+                  video.muted = true;
+                  
+                  // Handle autoplay with user interaction
+                  const playVideo = () => {
+                    video.play().catch(e => {
+                      console.log('Video autoplay prevented:', e.name);
+                      // Autoplay was prevented, wait for user interaction
+                      document.addEventListener('click', function playOnClick() {
+                        video.play().catch(() => {});
+                        document.removeEventListener('click', playOnClick);
+                      }, { once: true });
+                    });
+                  };
+                  
+                  // Try to play when video is visible
+                  const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                      if (entry.isIntersecting) {
+                        playVideo();
+                      }
+                    });
+                  }, { threshold: 0.5 });
+                  
+                  observer.observe(video);
+                });
+              });
+              
+              // Performance monitoring
               window.startLoadTime = Date.now();
               window.addEventListener('load', function() {
                 window.loadTime = Date.now() - window.startLoadTime;
-                console.log('Page loaded in', window.loadTime, 'ms');
+                if (window.loadTime > 3000) {
+                  console.warn('Page load took', window.loadTime, 'ms - Consider optimizing');
+                }
               });
             `
           }}
         />
       </head>
-      <body className="min-h-screen flex flex-col">
+      <body className="min-h-screen flex flex-col bg-gray-50">
         <Providers session={session}>
-          <main className="flex-1 pb-16">{children}</main>
+          <main className="flex-1 pb-16 md:pb-0">{children}</main>
 
           {/* Global Bottom Navigation (mobile only) */}
           <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
             <BottomNav />
           </div>
         </Providers>
+        
+        {/* Add global error boundary for video errors */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Global error handler for video errors
+              window.addEventListener('error', function(e) {
+                if (e.target && e.target.tagName === 'VIDEO') {
+                  e.preventDefault();
+                  console.log('Video error handled:', e.message);
+                  return false;
+                }
+              }, true);
+              
+              // Handle promise rejections
+              window.addEventListener('unhandledrejection', function(e) {
+                if (e.reason && e.reason.name === 'AbortError' && e.reason.message.includes('video')) {
+                  e.preventDefault();
+                  console.log('Video promise rejection handled');
+                  return false;
+                }
+              });
+            `
+          }}
+        />
       </body>
     </html>
   );
