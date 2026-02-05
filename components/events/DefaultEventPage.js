@@ -1632,71 +1632,67 @@ export default function DefaultEventPage({ event }) {
     </section>
   )}
           {/* NEWS SECTION - Only render if news exist */}
-          {hasNews && (
-            <section id="news" className="mt-12">
-              <motion.div 
-                className="text-center mb-8"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-              >
-                <h2 className="text-3xl font-bold text-gray-900 mb-3">Latest News</h2>
-                <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                  Stay updated with the latest event news and announcements
-                </p>
-              </motion.div>
+{hasNews && (
+  <section id="news" className="mt-12">
+    <motion.div 
+      className="text-center mb-8"
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+    >
+      <h2 className="text-3xl font-bold text-gray-900 mb-3">Latest News</h2>
+      <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+        Stay updated with the latest event news and announcements
+      </p>
+    </motion.div>
 
-              <div className="flex justify-center">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-7xl">
-                  {news.slice(0, typeof window !== 'undefined' && window.innerWidth < 768 ? 2 : 4).map((newsItem, index) => (
-                    <Link
-                      key={index}
-                      href={`/myevent/${event?.id}/news`}
-                    >
-                      <motion.div
-                        className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gold-100/50 hover:shadow-xl transition-all duration-300 group cursor-pointer"
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: index * 0.1 }}
-                      >
-                        {newsItem.image && (
-                          <div className="relative h-40 overflow-hidden">
-                            <Image
-                              src={newsItem.image}
-                              alt={newsItem.title}
-                              fill
-                              className="object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
-                          </div>
-                        )}
-                        <div className="p-4">
-                          <h3 className="font-bold text-gray-900 text-sm mb-2 line-clamp-2">
-                            {newsItem.title}
-                          </h3>
-                          <p className="text-xs text-gray-600 mb-3 line-clamp-2">
-                            {getShortContent(newsItem.content)}
-                          </p>
-                          <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span>{newsItem.author}</span>
-                            <div className="flex items-center gap-1">
-                              <Eye className="w-3 h-3" />
-                              <span>{newsItem.views || 0}</span>
-                            </div>
-                          </div>
-                          {newsItem.published_at && (
-                            <div className="text-xs text-gray-400 mt-2">
-                              {new Date(newsItem.published_at).toLocaleDateString()}
-                            </div>
-                          )}
-                        </div>
-                      </motion.div>
-                    </Link>
-                  ))}
+    <div className="flex justify-center">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-7xl">
+        {news.slice(0, typeof window !== 'undefined' && window.innerWidth < 768 ? 2 : 4).map((newsItem, index) => (
+          <Link
+            key={index}
+            href={`/myevent/${event?.id}/news`}
+          >
+            <motion.div
+              className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gold-100/50 hover:shadow-xl transition-all duration-300 group cursor-pointer"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.1 }}
+            >
+              {newsItem.image && (
+                <div className="relative h-40 overflow-hidden">
+                  <Image
+                    src={newsItem.image}
+                    alt={newsItem.title}
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                </div>
+              )}
+              <div className="p-4">
+                <h3 className="font-bold text-gray-900 text-sm mb-2 line-clamp-2">
+                  {newsItem.title}
+                </h3>
+                <p className="text-xs text-gray-600 mb-3 line-clamp-2">
+                  {getShortContent(newsItem.content)}
+                </p>
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>{newsItem.author}</span>
+                  {newsItem.published_at && (
+                    <div className="text-xs text-gray-400">
+                      {new Date(newsItem.published_at).toLocaleDateString()}
+                    </div>
+                  )}
                 </div>
               </div>
-            </section>
-          )}
+            </motion.div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  </section>
+)}
 
           {/* SCHEDULE SECTION - Only render if activities exist */}
           {hasActivities && (
