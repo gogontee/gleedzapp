@@ -1,9 +1,10 @@
-// app/layout.js - UPDATED with cache busting
+// app/layout.js - UPDATED for Supabase auth
 import { Inter } from 'next/font/google';
 import "./globals.css";
 import Providers from "./providers";
 import BottomNav from "../components/BottomNav";
-import { getServerSession } from "next-auth";
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -83,7 +84,17 @@ export const viewport = {
 };
 
 export default async function RootLayout({ children }) {
-  const session = await getServerSession();
+  // CREATE SUPABASE SERVER CLIENT FOR SESSION
+  const supabase = createServerComponentClient({ cookies });
+  
+  // Get Supabase session (not next-auth!)
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  // Add debugging
+  console.log('Layout - Session exists:', !!session);
+  if (session) {
+    console.log('Layout - User ID:', session.user.id);
+  }
 
   return (
     <html lang="en" className={inter.className}>
@@ -122,6 +133,19 @@ export default async function RootLayout({ children }) {
                 "https://linkedin.com/company/gleedz"
               ]
             })
+          }}
+        />
+        
+        {/* Add performance monitoring */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.startLoadTime = Date.now();
+              window.addEventListener('load', function() {
+                window.loadTime = Date.now() - window.startLoadTime;
+                console.log('Page loaded in', window.loadTime, 'ms');
+              });
+            `
           }}
         />
       </head>

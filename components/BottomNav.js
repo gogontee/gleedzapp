@@ -2,87 +2,117 @@
 
 import { Home, LayoutDashboard, List, Calendar, X, Store, Info } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabaseClient"; // adjust path
+import { useEffect, useState, useCallback } from "react";
+import { supabase } from "../lib/supabaseClient";
+import { useSession } from "@supabase/auth-helpers-react";
 
 export default function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState(null);
+  const session = useSession();
   const [userRole, setUserRole] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showGleedzMenu, setShowGleedzMenu] = useState(false);
+  const [cachedUserRole, setCachedUserRole] = useState(null);
 
-  // Check user authentication and role
+  // Get user role ONCE and cache it
+  const fetchUserRole = useCallback(async (userId) => {
+    if (!userId) return null;
+    
+    // Check localStorage cache first
+    const cached = localStorage.getItem(`userRole_${userId}`);
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      // SINGLE QUERY with OR condition instead of multiple sequential queries
+      const { data, error } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .single()
+        .timeout(5000); // ADD TIMEOUT
+
+      if (data && !error) {
+        localStorage.setItem(`userRole_${userId}`, data.role);
+        return data.role;
+      }
+
+      // If not in users table, check other tables in parallel
+      const [publisherRes, fanRes] = await Promise.all([
+        supabase.from('publishers').select('id').eq('id', userId).single().timeout(3000),
+        supabase.from('fans').select('id').eq('id', userId).single().timeout(3000)
+      ]);
+
+      if (publisherRes.data) {
+        localStorage.setItem(`userRole_${userId}`, 'publisher');
+        return 'publisher';
+      } else if (fanRes.data) {
+        localStorage.setItem(`userRole_${userId}`, 'fans');
+        return 'fans';
+      }
+
+      return 'fans'; // default
+    } catch (error) {
+      console.error('Error fetching user role:', error);
+      return 'fans'; // fallback
+    }
+  }, []);
+
+  // Only fetch when session changes
   useEffect(() => {
-    const getUserAndRole = async () => {
+    let isMounted = true;
+    
+    const updateUserRole = async () => {
+      if (!session?.user?.id) {
+        if (isMounted) {
+          setUserRole(null);
+          setCachedUserRole(null);
+        }
+        return;
+      }
+
+      // Skip if we already have cached role
+      if (cachedUserRole === session.user.id) {
+        return;
+      }
+
       setLoading(true);
       try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        
-        if (authUser) {
-          setUser(authUser);
-          
-          // First check the users table for role
-          const { data: userProfile, error: userError } = await supabase
-            .from('users')
-            .select('id, role, email')
-            .eq('id', authUser.id)
-            .single();
-
-          if (userProfile && !userError) {
-            setUserRole(userProfile.role);
-          } else {
-            // User not found in users table, check if they exist in publishers or fans table
-            const { data: publisherData } = await supabase
-              .from('publishers')
-              .select('id, email')
-              .eq('id', authUser.id)
-              .single();
-
-            if (publisherData) {
-              setUserRole('publisher');
-            } else {
-              const { data: fanData } = await supabase
-                .from('fans')
-                .select('id, email')
-                .eq('id', authUser.id)
-                .single();
-
-              if (fanData) {
-                setUserRole('fans');
-              } else {
-                // User not found in any table, set default as fan
-                setUserRole('fans');
-              }
-            }
-          }
-        } else {
-          setUser(null);
-          setUserRole(null);
+        const role = await fetchUserRole(session.user.id);
+        if (isMounted && role) {
+          setUserRole(role);
+          setCachedUserRole(session.user.id);
         }
-      } catch (error) {
-        console.error('Error fetching user role:', error);
-        setUser(null);
-        setUserRole(null);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
-    getUserAndRole();
+    updateUserRole();
 
-    // Set up auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          await getUserAndRole(); // Refresh user data when signed in
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-          setUserRole(null);
-        }
+    return () => {
+      isMounted = false;
+    };
+  }, [session, fetchUserRole, cachedUserRole]);
+
+  // SIMPLIFIED Auth listener - just clear cache on sign out
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setUserRole(null);
+        setCachedUserRole(null);
+        // Clear all cached roles
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('userRole_')) {
+            localStorage.removeItem(key);
+          }
+        });
       }
-    );
+    });
 
     return () => subscription.unsubscribe();
   }, []);
@@ -100,30 +130,24 @@ export default function BottomNav() {
   }, [showGleedzMenu]);
 
   const handleNavClick = (path, requiresAuth = false) => {
-    if (requiresAuth && !user) {
+    if (requiresAuth && !session?.user) {
       alert("Please log in to access your dashboard.");
       router.push('/login');
       return;
     }
 
-    // For dashboard, we dynamically build path based on user role
     if (path === "dashboard") {
-      if (user) {
+      if (session?.user) {
         if (loading) {
           console.log('Still loading user data...');
           return;
         }
         
-        console.log('Dashboard clicked - User:', user.id);
-        console.log('User role:', userRole);
-        
         if (userRole === 'publisher') {
-          router.push(`/publisherdashboard/${user.id}`);
-        } else if (userRole === 'fans') {
-          router.push(`/fansdashboard/${user.id}`);
+          router.push(`/publisherdashboard/${session.user.id}`);
+        } else if (userRole === 'fans' || !userRole) {
+          router.push(`/fansdashboard/${session.user.id}`);
         } else {
-          // Default fallback - if role is unknown, show login modal or ask for role
-          console.log('Unknown user role - redirecting to login');
           router.push('/login?role=publisher');
         }
       } else {
@@ -132,7 +156,6 @@ export default function BottomNav() {
       return;
     }
 
-    // For Gleedz, toggle the menu instead of direct navigation
     if (path === "/gleedz") {
       setShowGleedzMenu(!showGleedzMenu);
       return;
